@@ -10,10 +10,10 @@ Back to [[00 Home]] · Why free: [[12 Platforms and Cost]] · Fits into [[03 Arc
 sky.<yourdomain>          → Cloudflare Pages (the PWA: HTML/JS/CSS)
 sky.<yourdomain>/api/*    → Cloudflare Worker (Pages Functions)
 ```
-Using **Pages Functions** (a `/functions` folder in the same repo) keeps everything in one project, one deploy, same origin, so there are **no CORS issues**.
+The API is a **Hono** app in TypeScript. Locally it runs on **Node.js**; in production the same code is deployed as a Cloudflare Worker and routed under `sky.<yourdomain>/api/*`, so the site and API share one origin and there are **no CORS issues**. Details: [[17 Tech Stack]]
 
 ## Why HTTPS matters
-Camera, geolocation and device orientation **only work on HTTPS**. Cloudflare gives a free certificate automatically. For local testing on a phone use `npx wrangler pages dev` + **Cloudflare Tunnel** (`cloudflared tunnel --url http://localhost:8788`) to get an HTTPS URL on your phone instantly.
+Camera, geolocation and device orientation **only work on HTTPS**. Cloudflare gives a free certificate automatically. For local testing on a phone, run `npm run dev` (Vite + Node.js API) and then **Cloudflare Tunnel** (`cloudflared tunnel --url http://localhost:5173`) to get an HTTPS URL on your phone instantly.
 
 ## Worker endpoints
 | Endpoint | Does | Cache |
@@ -29,7 +29,7 @@ Camera, geolocation and device orientation **only work on HTTPS**. Cloudflare gi
 ## Deploy flow
 1. GitHub repo → connect in Cloudflare dashboard → Pages → auto-deploy on push
 2. Add custom domain `sky.<yourdomain>` (one click since the domain is already on Cloudflare)
-3. Bind KV namespace `TLE_CACHE`, add the cron trigger (cron needs a standalone Worker if Pages Functions don't support it; then use a small separate Worker that writes to the same KV)
+3. Deploy the API Worker with `wrangler deploy` (route `sky.<yourdomain>/api/*`), bind KV namespace `TLE_CACHE`, add the cron trigger in `wrangler.toml`
 
 ## Privacy
 User location is sent only as a rounded grid cell to our own Worker; nothing is stored. Good to mention to judges.

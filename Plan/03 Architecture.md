@@ -38,7 +38,7 @@ flowchart LR
 | Component | Runs where | Note |
 |---|---|---|
 | Static site (HTML/JS) | Cloudflare Pages | [[13 Cloudflare Hosting]] |
-| `/api/aircraft?lat&lon&r` | Cloudflare Worker | Proxies OpenSky (hides credentials, adds CORS, caches). See [[04 Data Source - ADS-B Aircraft]] |
+| `/api/aircraft?lat&lon&r` | Hono API: Node.js locally, Cloudflare Worker in production | Proxies OpenSky (hides credentials, adds CORS, caches). See [[04 Data Source - ADS-B Aircraft]] |
 | `/api/tle?group=visual` | Cloudflare Worker + Cron + KV/Cache | Respects CelesTrak's rate limits. See [[05 Data Source - Satellites TLE]] |
 | Geo math | Phone (JS) | [[06 Math - Positions to Az El]] |
 | SGP4 | Phone (JS, Web Worker thread) | [[07 Math - SGP4 Propagation]] |

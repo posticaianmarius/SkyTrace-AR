@@ -16,7 +16,8 @@ Principle: **always have a working demo**. Each phase ends with something that r
 - [ ] Install Stellarium (reference) → [[11 Accuracy Evaluation]]
 
 ## Phase 1 (h 0–6): Skeleton on the phone
-- [ ] Vite + TypeScript project, deploy "hello" to Pages over HTTPS
+- [ ] npm workspaces (`app`, `api`, `shared`), TypeScript strict, Vite app + Hono API on Node.js → [[17 Tech Stack]]
+- [ ] Deploy "hello" to Pages + API Worker over HTTPS
 - [ ] Start button → request camera, location, motion permissions (iOS flow!) → [[08 Phone Sensors and Camera Projection]]
 - [ ] Full-screen back-camera `<video>` + `<canvas>` overlay
 - [ ] Debug HUD: lat/lon, heading, pitch, roll, fps

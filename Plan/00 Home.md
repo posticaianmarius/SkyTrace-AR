@@ -37,6 +37,7 @@ This vault is the plan for the challenge. Start here, then follow the links. Ope
 |---|---|
 | Native app or web? | **Web app (PWA)**. One codebase runs on iPhone and Android, costs nothing, and needs no app store. See [[12 Platforms and Cost]] |
 | Where hosted? | **Cloudflare Pages** on your domain, plus a **Worker** as data proxy/cache. See [[13 Cloudflare Hosting]] |
+| Language / runtime | **TypeScript** everywhere; **Node.js** for dev server, local API (Hono), tests and scripts. See [[17 Tech Stack]] |
 | Satellite math | `satellite.js` (SGP4 in JS). See [[07 Math - SGP4 Propagation]] |
 | Aircraft data | OpenSky through the Worker, with adsb.lol as fallback. See [[04 Data Source - ADS-B Aircraft]] |
 | AR approach | Camera `<video>` + sensor orientation + `<canvas>` overlay (no WebXR, so it works on iOS). See [[08 Phone Sensors and Camera Projection]] |
