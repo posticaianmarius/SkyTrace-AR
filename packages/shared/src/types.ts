@@ -44,14 +44,21 @@ export interface TleRecord {
   line2: string;
 }
 
-export const TLE_GROUPS = ['visual', 'stations', 'starlink', 'gps-ops', 'weather'] as const;
+/**
+ * CelesTrak groups, plus 'satnogs': every satellite in the SatNOGS DB (~1,700,
+ * mostly small radio satellites), served by our API only (SatNOGS has no CORS).
+ */
+export const TLE_GROUPS = ['visual', 'stations', 'starlink', 'gps-ops', 'weather', 'satnogs'] as const;
 export type TleGroup = (typeof TLE_GROUPS)[number];
 
 export interface TleResponse {
   group: TleGroup;
-  /** Unix seconds when the data was downloaded from CelesTrak. */
+  /** Unix seconds when the data was downloaded. */
   fetchedAt: number;
   sats: TleRecord[];
-  /** "fallback" when CelesTrak was down and a reduced bright-satellite list was used. */
-  source?: 'celestrak' | 'fallback';
+  /**
+   * "fallback" when CelesTrak was down and the reduced bright-satellite list was
+   * used; "satnogs" for the SatNOGS group.
+   */
+  source?: 'celestrak' | 'fallback' | 'satnogs';
 }

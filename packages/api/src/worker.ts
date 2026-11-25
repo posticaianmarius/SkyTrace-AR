@@ -5,7 +5,7 @@ import { refreshGroup } from './sources/celestrak';
 const app = createApp();
 
 /** Groups the cron keeps warm. Others are fetched on first request. */
-const CRON_GROUPS = ['visual', 'stations', 'starlink'] as const;
+const CRON_GROUPS = ['visual', 'stations', 'starlink', 'satnogs'] as const;
 
 interface ExecutionContextLike {
   waitUntil(p: Promise<unknown>): void;

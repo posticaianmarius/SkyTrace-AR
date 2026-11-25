@@ -35,6 +35,37 @@ const evalLog = new EvalLog();
 let calib: CalState = loadCalibration();
 let mode: Mode = 'view';
 let showBodies = true;
+
+/**
+ * "Show all": ignore the light level. Satellites in daylight or Earth's shadow and
+ * planets in a bright sky are normally drawn small and faint; this draws them
+ * like visible ones (full-size filled marker, bright colour, label priority).
+ */
+const SHOW_ALL_KEY = 'skytrace:showAll';
+let showAll = readFlag(SHOW_ALL_KEY);
+let satsVisibleByEye = 0;
+
+function showAtFullStrength(o: SkyObject): SkyObject {
+  if (o.visible) return o;
+  // Same boost a satellite gets when it is really visible (see Satellites.objects).
+  return { ...o, visible: true, priority: o.kind === 'sat' ? o.priority + 20 : o.priority };
+}
+
+function readFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeFlag(key: string, on: boolean) {
+  try {
+    localStorage.setItem(key, on ? '1' : '0');
+  } catch {
+    /* storage unavailable: setting lasts for this visit only */
+  }
+}
 let longFovDeg = DEFAULT_LONG_FOV_DEG;
 let bodies: BodiesResult = { objects: [], sunElDeg: 0 };
 let bodiesAt = 0;
@@ -117,6 +148,9 @@ function frame() {
 
   const visibleBodies = showBodies ? bodies.objects.filter((o) => o.elDeg > -1) : [];
   objects = [...visibleBodies, ...sats.objects(now), ...aircraft.objects(now)];
+  // Counted before "Show all" so the status line keeps reporting what the eye can see.
+  satsVisibleByEye = objects.filter((o) => o.kind === 'sat' && o.visible).length;
+  if (showAll) objects = objects.map(showAtFullStrength);
   autoAim();
   placed = overlay.draw(cam, objects);
 
@@ -169,7 +203,7 @@ function updateHud(now: number) {
   const lines = [
     `${loc.source === 'gps' ? `GPS ±${Math.round(loc.accuracyM ?? 0)} m` : loc.source === 'url' ? 'location: URL' : 'location: default'} · ${compassLabel()} · ${fps.toFixed(0)} fps`,
     `✈ ${objects.filter((o) => o.kind === 'aircraft' && inView(o)).length} in view / ${objects.filter((o) => o.kind === 'aircraft').length}${aircraft.source ? ` (${aircraft.source}${Number.isFinite(acAge) ? `, ${Math.round(acAge)} s old` : ''})` : ''}${aircraft.error && aircraft.source === 'none' ? ' error' : ''}`,
-    `🛰 ${satObjs.length} up / ${sats.total}${sats.source === 'fallback' ? ' (fallback list)' : ''} · ${satObjs.filter((o) => o.visible).length} visible`,
+    `🛰 ${satObjs.length} up / ${sats.total}${sats.source === 'fallback' ? ' (fallback list)' : ''} · ${satsVisibleByEye} visible`,
     `cal ${calib.yawDeg >= 0 ? '+' : ''}${calib.yawDeg.toFixed(1)}° ×${calib.fovScale.toFixed(3)}${mode !== 'view' ? ` · ${mode.toUpperCase()}` : ''}`,
   ];
   if (DEBUG) {
@@ -322,6 +356,15 @@ $('btn-layers').addEventListener('click', () => {
   setMode('view');
   sheets.layers.hidden = !sheets.layers.hidden;
 });
+const btnShowAll = $('btn-showall');
+btnShowAll.setAttribute('aria-pressed', String(showAll));
+btnShowAll.addEventListener('click', () => {
+  showAll = !showAll;
+  writeFlag(SHOW_ALL_KEY, showAll);
+  btnShowAll.setAttribute('aria-pressed', String(showAll));
+  toast(showAll ? 'Showing everything, even objects you can’t see by eye right now.' : 'Showing only what you can see by eye at full strength.');
+});
+
 $('btn-night').addEventListener('click', (e) => {
   overlay.night = !overlay.night;
   document.body.classList.toggle('night', overlay.night);

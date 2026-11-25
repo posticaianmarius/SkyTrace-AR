@@ -32,6 +32,8 @@ async function fetchGroup(group: TleGroup): Promise<TleResponse> {
   } catch {
     /* fall through */
   }
+  // SatNOGS is not a CelesTrak group and blocks browser requests: our API is the only way.
+  if (group === 'satnogs') throw new Error('SatNOGS list unavailable');
   try {
     const res = await fetch(`https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`, {
       signal: AbortSignal.timeout(15_000),

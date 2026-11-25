@@ -1,4 +1,4 @@
-import { fetchBrightTles, parseTleText, type TleGroup, type TleResponse } from '@skytrace/shared';
+import { fetchBrightTles, fetchSatnogsGroup, parseTleText, type TleGroup, type TleResponse } from '@skytrace/shared';
 import type { KeyValueStore } from '../store';
 import { USER_AGENT } from './common';
 
@@ -41,7 +41,9 @@ export async function getGroup(store: KeyValueStore, group: TleGroup): Promise<T
 }
 
 export async function refreshGroup(store: KeyValueStore, group: TleGroup): Promise<TleResponse> {
-  const fresh = await downloadGroup(group);
+  // 'satnogs' is not a CelesTrak group: it comes from the SatNOGS DB in one request.
+  const fresh =
+    group === 'satnogs' ? await fetchSatnogsGroup({ 'user-agent': USER_AGENT }) : await downloadGroup(group);
   await store.put(key(group), JSON.stringify(fresh), TLE_KEEP_SEC);
   return fresh;
 }
