@@ -1,0 +1,354 @@
+{
+ "nodes": [
+  {
+   "id": "g2",
+   "type": "group",
+   "label": "3. Ship it",
+   "x": 420,
+   "y": -190,
+   "width": 380,
+   "height": 860
+  },
+  {
+   "id": "g1",
+   "type": "group",
+   "label": "2. Technical core",
+   "x": -830,
+   "y": 220,
+   "width": 1200,
+   "height": 950
+  },
+  {
+   "id": "g0",
+   "type": "group",
+   "label": "1. Understand the task",
+   "x": -830,
+   "y": -340,
+   "width": 380,
+   "height": 460
+  },
+  {
+   "id": "n0",
+   "type": "file",
+   "file": "00 Home.md",
+   "x": 0,
+   "y": 0,
+   "width": 320,
+   "height": 90,
+   "color": "1"
+  },
+  {
+   "id": "n1",
+   "type": "file",
+   "file": "01 Challenge Brief.md",
+   "x": -800,
+   "y": -300,
+   "width": 320,
+   "height": 90,
+   "color": "4"
+  },
+  {
+   "id": "n2",
+   "type": "file",
+   "file": "02 Concept and User Flow.md",
+   "x": -800,
+   "y": -150,
+   "width": 320,
+   "height": 90,
+   "color": "4"
+  },
+  {
+   "id": "n3",
+   "type": "file",
+   "file": "14 Prior Art.md",
+   "x": -800,
+   "y": 0,
+   "width": 320,
+   "height": 90,
+   "color": "4"
+  },
+  {
+   "id": "n4",
+   "type": "file",
+   "file": "03 Architecture.md",
+   "x": -400,
+   "y": 250,
+   "width": 320,
+   "height": 90,
+   "color": "5"
+  },
+  {
+   "id": "n5",
+   "type": "file",
+   "file": "04 Data Source - ADS-B Aircraft.md",
+   "x": -800,
+   "y": 450,
+   "width": 320,
+   "height": 90,
+   "color": "6"
+  },
+  {
+   "id": "n6",
+   "type": "file",
+   "file": "05 Data Source - Satellites TLE.md",
+   "x": -400,
+   "y": 450,
+   "width": 320,
+   "height": 90,
+   "color": "6"
+  },
+  {
+   "id": "n7",
+   "type": "file",
+   "file": "07 Math - SGP4 Propagation.md",
+   "x": -400,
+   "y": 600,
+   "width": 320,
+   "height": 90,
+   "color": "6"
+  },
+  {
+   "id": "n8",
+   "type": "file",
+   "file": "06 Math - Positions to Az El.md",
+   "x": -600,
+   "y": 750,
+   "width": 320,
+   "height": 90,
+   "color": "6"
+  },
+  {
+   "id": "n9",
+   "type": "file",
+   "file": "08 Phone Sensors and Camera Projection.md",
+   "x": -600,
+   "y": 900,
+   "width": 320,
+   "height": 90,
+   "color": "6"
+  },
+  {
+   "id": "n10",
+   "type": "file",
+   "file": "09 Calibration.md",
+   "x": -200,
+   "y": 900,
+   "width": 320,
+   "height": 90,
+   "color": "2"
+  },
+  {
+   "id": "n11",
+   "type": "file",
+   "file": "10 Night Mode Orbit Fit.md",
+   "x": 0,
+   "y": 750,
+   "width": 320,
+   "height": 90,
+   "color": "2"
+  },
+  {
+   "id": "n12",
+   "type": "file",
+   "file": "11 Accuracy Evaluation.md",
+   "x": -200,
+   "y": 1050,
+   "width": 320,
+   "height": 90,
+   "color": "2"
+  },
+  {
+   "id": "n13",
+   "type": "file",
+   "file": "12 Platforms and Cost.md",
+   "x": 450,
+   "y": -150,
+   "width": 320,
+   "height": 90,
+   "color": "3"
+  },
+  {
+   "id": "n14",
+   "type": "file",
+   "file": "13 Cloudflare Hosting.md",
+   "x": 450,
+   "y": 0,
+   "width": 320,
+   "height": 90,
+   "color": "3"
+  },
+  {
+   "id": "n15",
+   "type": "file",
+   "file": "17 Tech Stack.md",
+   "x": 450,
+   "y": 150,
+   "width": 320,
+   "height": 90,
+   "color": "3"
+  },
+  {
+   "id": "n16",
+   "type": "file",
+   "file": "15 Implementation Plan 48h.md",
+   "x": 450,
+   "y": 350,
+   "width": 320,
+   "height": 90,
+   "color": "5"
+  },
+  {
+   "id": "n17",
+   "type": "file",
+   "file": "16 Risks and Mitigations.md",
+   "x": 450,
+   "y": 550,
+   "width": 320,
+   "height": 90,
+   "color": "1"
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "fromNode": "n0",
+   "toNode": "n1"
+  },
+  {
+   "id": "e1",
+   "fromNode": "n0",
+   "toNode": "n4"
+  },
+  {
+   "id": "e2",
+   "fromNode": "n0",
+   "toNode": "n13"
+  },
+  {
+   "id": "e3",
+   "fromNode": "n0",
+   "toNode": "n16"
+  },
+  {
+   "id": "e4",
+   "fromNode": "n1",
+   "toNode": "n2",
+   "label": "hook"
+  },
+  {
+   "id": "e5",
+   "fromNode": "n1",
+   "toNode": "n3",
+   "label": "tools"
+  },
+  {
+   "id": "e6",
+   "fromNode": "n1",
+   "toNode": "n12",
+   "label": "judged on"
+  },
+  {
+   "id": "e7",
+   "fromNode": "n4",
+   "toNode": "n5"
+  },
+  {
+   "id": "e8",
+   "fromNode": "n4",
+   "toNode": "n6"
+  },
+  {
+   "id": "e9",
+   "fromNode": "n6",
+   "toNode": "n7",
+   "label": "TLEs"
+  },
+  {
+   "id": "e10",
+   "fromNode": "n7",
+   "toNode": "n8",
+   "label": "sat ECEF"
+  },
+  {
+   "id": "e11",
+   "fromNode": "n5",
+   "toNode": "n8",
+   "label": "lat/lon/alt"
+  },
+  {
+   "id": "e12",
+   "fromNode": "n8",
+   "toNode": "n9",
+   "label": "az/el"
+  },
+  {
+   "id": "e13",
+   "fromNode": "n10",
+   "toNode": "n9",
+   "label": "offset"
+  },
+  {
+   "id": "e14",
+   "fromNode": "n7",
+   "toNode": "n11",
+   "label": "predicted tracks"
+  },
+  {
+   "id": "e15",
+   "fromNode": "n11",
+   "toNode": "n10",
+   "label": "auto-fit"
+  },
+  {
+   "id": "e16",
+   "fromNode": "n10",
+   "toNode": "n12",
+   "label": "error ↓"
+  },
+  {
+   "id": "e17",
+   "fromNode": "n11",
+   "toNode": "n12",
+   "label": "objective ref"
+  },
+  {
+   "id": "e18",
+   "fromNode": "n13",
+   "toNode": "n14",
+   "label": "free PWA"
+  },
+  {
+   "id": "e19",
+   "fromNode": "n14",
+   "toNode": "n4",
+   "label": "Worker proxy"
+  },
+  {
+   "id": "e20",
+   "fromNode": "n15",
+   "toNode": "n16"
+  },
+  {
+   "id": "e21",
+   "fromNode": "n14",
+   "toNode": "n15"
+  },
+  {
+   "id": "e22",
+   "fromNode": "n16",
+   "toNode": "n17"
+  },
+  {
+   "id": "e23",
+   "fromNode": "n3",
+   "toNode": "n17",
+   "label": "originality"
+  },
+  {
+   "id": "e24",
+   "fromNode": "n17",
+   "toNode": "n11",
+   "label": "clear skies"
+  }
+ ]
+}
