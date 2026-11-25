@@ -1,7 +1,35 @@
-Plan/.obsidian/workspace*.json
+# Dependencies and build output
 node_modules/
 dist/
+coverage/
+*.tsbuildinfo
+
+# Local caches (downloaded TLE / aircraft data)
 .cache/
+
+# Cloudflare Wrangler local state
 .wrangler/
-.dev.vars
+
+# Secrets: never commit. Only the empty template .env.example is tracked.
 .env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+
+# Claude Code per-user settings (shared launch.json stays tracked)
+.claude/settings.local.json
+
+# Obsidian per-user window layout
+Plan/.obsidian/workspace*.json
+
+# Logs and OS / editor junk
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

@@ -57,13 +57,20 @@ Tests cover the geodesy, rotation conventions, camera projection, the calibratio
 
 One Worker serves the built app as static assets and handles `/api/*`. See `packages/api/wrangler.toml`.
 
+Live at **https://skytrace.spifly.stream**.
+
 1. `npx wrangler login`
 2. `npx wrangler kv namespace create TLE_CACHE` and paste the id into `wrangler.toml`
-3. Set the custom domain route in `wrangler.toml` (e.g. `sky.yourdomain.com`)
-4. Optional: `npx wrangler secret put OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET`
-5. `npm run deploy`
+3. Set the custom domain route in `wrangler.toml` (currently `skytrace.spifly.stream`)
+4. `npm run deploy`
 
-A cron trigger refreshes CelesTrak TLEs every 3 hours so phones never hit CelesTrak directly.
+A cron trigger refreshes CelesTrak TLEs every 3 hours so phones normally never hit CelesTrak directly.
+
+### Data sources from Cloudflare (tested 2026-11-25)
+
+- **OpenSky is unreachable from Cloudflare Workers** (every opensky-network.org host times out), so the Worker uses adsb.lol only (`AIRCRAFT_SOURCE = "adsblol"` in `wrangler.toml`). Local Node dev still tries OpenSky first.
+- **adsb.lol rate-limits Cloudflare's shared IPs** (about half the requests get HTTP 429). The Worker keeps the last good result in the edge cache and serves it (up to 90 s old) when that happens; the phone dead-reckons planes forward and retries after 3 s.
+- **Satellites:** if our API can't get TLEs, the phone fetches them directly from CelesTrak, then from a bright-satellite fallback list (tle.ivanstanojevic.me). Both allow browser requests.
 
 ## How it works
 

@@ -1,8 +1,45 @@
 /** Main-thread side of satellites: loads TLEs, talks to the SGP4 worker, interpolates. */
-import { enuToAzEl, refractionDeg, azElToEnu, type Geodetic, type TleGroup, type TleRecord, type TleResponse } from '@skytrace/shared';
+import {
+  azElToEnu,
+  enuToAzEl,
+  fetchBrightTles,
+  parseTleText,
+  refractionDeg,
+  type Geodetic,
+  type TleGroup,
+  type TleRecord,
+  type TleResponse,
+} from '@skytrace/shared';
 import type { SatState, SatWorkerIn, SatWorkerOut, SkyObject } from '../types';
 
 const CACHE_HOURS = 6;
+
+/**
+ * Our API first. If it fails (CelesTrak down, or the server's IP is rate
+ * limited), fetch directly from the phone: CelesTrak, then the bright-satellite
+ * fallback list (both allow browser requests).
+ */
+async function fetchGroup(group: TleGroup): Promise<TleResponse> {
+  try {
+    const res = await fetch(`/api/tle?group=${group}`);
+    if (res.ok) return (await res.json()) as TleResponse;
+  } catch {
+    /* fall through */
+  }
+  try {
+    const res = await fetch(`https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (res.ok) {
+      const sats = parseTleText(await res.text());
+      if (sats.length) return { group, fetchedAt: Math.floor(Date.now() / 1000), sats, source: 'celestrak' };
+    }
+  } catch {
+    /* fall through */
+  }
+  if (group !== 'visual' && group !== 'stations') throw new Error(`TLE ${group} unavailable`);
+  return fetchBrightTles(group);
+}
 
 async function loadGroup(group: TleGroup): Promise<TleResponse> {
   const key = `tle:${group}`;
@@ -10,14 +47,13 @@ async function loadGroup(group: TleGroup): Promise<TleResponse> {
     const raw = localStorage.getItem(key);
     if (raw) {
       const cached = JSON.parse(raw) as TleResponse;
-      if (Date.now() / 1000 - cached.fetchedAt < CACHE_HOURS * 3600 && cached.source !== 'fallback') return cached;
+      const maxAge = cached.source === 'fallback' ? 3600 : CACHE_HOURS * 3600;
+      if (Date.now() / 1000 - cached.fetchedAt < maxAge) return cached;
     }
   } catch {
     /* storage unavailable */
   }
-  const res = await fetch(`/api/tle?group=${group}`);
-  if (!res.ok) throw new Error(`TLE ${group}: HTTP ${res.status}`);
-  const data = (await res.json()) as TleResponse;
+  const data = await fetchGroup(group);
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch {

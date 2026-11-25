@@ -15,6 +15,8 @@ import {
 import type { SkyObject } from '../types';
 
 const POLL_MS = 10_000;
+/** Retry sooner after a failed update (e.g. the upstream briefly rate-limited us). */
+const RETRY_MS = 3_000;
 const RADIUS_KM = 150;
 /** Don't extrapolate further than this (stale data is worse than none). */
 const MAX_EXTRAPOLATE_SEC = 60;
@@ -38,22 +40,26 @@ export class AircraftFeed {
 
   private async poll() {
     if (this.timer) clearTimeout(this.timer);
+    let ok = true;
     if (this.obs && this.enabled && document.visibilityState !== 'hidden') {
       try {
         const q = `lat=${this.obs.lat.toFixed(3)}&lon=${this.obs.lon.toFixed(3)}&r=${RADIUS_KM}`;
         const res = await fetch(`/api/aircraft?${q}`);
         const data = (await res.json()) as AircraftResponse;
+        // Keep the previous planes (still dead-reckoned) if this update failed
         if (data.source !== 'none') {
           this.aircraft = data.aircraft;
           this.fetchedAt = data.fetchedAt;
+          this.source = data.source;
         }
-        this.source = data.source;
+        ok = data.source !== 'none';
         this.error = data.error ?? '';
       } catch (err) {
+        ok = false;
         this.error = String(err);
       }
     }
-    this.timer = setTimeout(() => this.poll(), POLL_MS);
+    this.timer = setTimeout(() => this.poll(), ok ? POLL_MS : RETRY_MS);
   }
 
   /** Median age of the position data in seconds. */

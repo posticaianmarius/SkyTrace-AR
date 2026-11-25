@@ -1,7 +1,16 @@
 # One Worker serves the built phone app (static assets) AND the /api routes.
+# Note: top-level keys must come before any [table] section in TOML.
 name = "skytrace-ar"
 main = "src/worker.ts"
 compatibility_date = "2025-11-01"
+
+# Custom domain on the spifly.stream Cloudflare zone (DNS + HTTPS certificate are created automatically)
+routes = [{ pattern = "skytrace.spifly.stream", custom_domain = true }]
+
+[vars]
+# OpenSky blocks Cloudflare's network (every opensky-network.org host times out),
+# so the Worker goes straight to adsb.lol. Local Node dev still tries OpenSky first.
+AIRCRAFT_SOURCE = "adsblol"
 
 [assets]
 directory = "../app/dist"
@@ -11,13 +20,10 @@ run_worker_first = ["/api/*"]
 [triggers]
 crons = ["17 */3 * * *"]
 
-# Create with:  npx wrangler kv namespace create TLE_CACHE   then paste the id here.
-# [[kv_namespaces]]
-# binding = "TLE_CACHE"
-# id = "<your-kv-namespace-id>"
-
-# Custom domain on your Cloudflare zone (uncomment and set):
-# routes = [{ pattern = "sky.example.com", custom_domain = true }]
+# Created with:  npx wrangler kv namespace create TLE_CACHE
+[[kv_namespaces]]
+binding = "TLE_CACHE"
+id = "4985af685d7c47caa75c8fabdee75a70"
 
 # Secrets (never commit):  npx wrangler secret put OPENSKY_CLIENT_ID
 #                          npx wrangler secret put OPENSKY_CLIENT_SECRET

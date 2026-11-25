@@ -22,6 +22,39 @@ export interface Env {
 const AIRCRAFT_TTL_SEC = 10;
 const memory = new MemoryStore();
 const inflight = new Map<string, Promise<AircraftResponse>>();
+/** Last successful aircraft response per area, served when upstream briefly fails. */
+const lastGood = new Map<string, AircraftResponse>();
+const STALE_OK_SEC = 90;
+
+/** Cloudflare's per-data-center Cache API (absent on Node, where we skip it). */
+interface EdgeCache {
+  match(req: Request): Promise<Response | undefined>;
+  put(req: Request, res: Response): Promise<void>;
+}
+const edgeCache = (globalThis as { caches?: { default?: EdgeCache } }).caches?.default ?? null;
+const edgeKey = (key: string) => new Request(`https://edge-cache.skytrace.internal/${encodeURIComponent(key)}`);
+
+async function readEdge(key: string): Promise<AircraftResponse | null> {
+  if (!edgeCache) return null;
+  try {
+    const res = await edgeCache.match(edgeKey(key));
+    return res ? ((await res.json()) as AircraftResponse) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeEdge(key: string, data: AircraftResponse): Promise<void> {
+  if (!edgeCache) return;
+  try {
+    const res = new Response(JSON.stringify(data), {
+      headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${STALE_OK_SEC}` },
+    });
+    await edgeCache.put(edgeKey(key), res);
+  } catch {
+    /* cache is best-effort */
+  }
+}
 
 export function storeFor(env: Env): KeyValueStore {
   if (env.STORE) return env.STORE;
@@ -73,22 +106,42 @@ export function createApp() {
     const rKm = r + 30; // compensate for the snapping
     const cacheKey = `ac:${sLat.toFixed(2)}:${sLon.toFixed(2)}:${rKm}`;
 
-    const hit = await memory.get(cacheKey);
-    if (hit) return c.body(hit, 200, { 'content-type': 'application/json', 'x-cache': 'hit' });
+    const reply = (data: AircraftResponse, cache: string) =>
+      c.body(JSON.stringify(data), 200, {
+        'content-type': 'application/json',
+        'cache-control': 'public, max-age=5',
+        'x-cache': cache,
+      });
 
+    // 1. This instance's memory, 2. the data center's shared edge cache
+    const hit = await memory.get(cacheKey);
+    if (hit) return reply(JSON.parse(hit) as AircraftResponse, 'memory');
+    const edge = await readEdge(cacheKey);
+    const age = (d: AircraftResponse) => Date.now() / 1000 - d.fetchedAt;
+    if (edge && age(edge) < AIRCRAFT_TTL_SEC) {
+      await memory.put(cacheKey, JSON.stringify(edge), Math.ceil(AIRCRAFT_TTL_SEC - age(edge)));
+      return reply(edge, 'edge');
+    }
+
+    // 3. Upstream (one request per area at a time)
     let p = inflight.get(cacheKey);
     if (!p) {
       p = loadAircraft(c.env ?? {}, sLat, sLon, rKm).finally(() => inflight.delete(cacheKey));
       inflight.set(cacheKey, p);
     }
     const data = await p;
-    const body = JSON.stringify(data);
-    if (data.source !== 'none') await memory.put(cacheKey, body, AIRCRAFT_TTL_SEC);
-    return c.body(body, 200, {
-      'content-type': 'application/json',
-      'cache-control': 'public, max-age=5',
-      'x-cache': 'miss',
-    });
+    if (data.source !== 'none') {
+      lastGood.set(cacheKey, data);
+      await memory.put(cacheKey, JSON.stringify(data), AIRCRAFT_TTL_SEC);
+      await writeEdge(cacheKey, data);
+      return reply(data, 'miss');
+    }
+
+    // 4. Upstream failed (e.g. adsb.lol 429): serve the newest recent good result we have.
+    const prev = [lastGood.get(cacheKey), edge]
+      .filter((d): d is AircraftResponse => !!d && age(d) < STALE_OK_SEC)
+      .sort((a, b) => b.fetchedAt - a.fetchedAt)[0];
+    return reply(prev ? { ...prev, error: data.error } : data, prev ? 'stale' : 'error');
   });
 
   /** GET /api/tle?group=visual */
