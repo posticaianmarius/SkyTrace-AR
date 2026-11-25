@@ -5,6 +5,8 @@ tags: [sky-ar, implementation, plan]
 
 Back to [[00 Home]] · Stack: [[17 Tech Stack]] · Risks: [[16 Risks and Mitigations]]
 
+> **Status (2026-11-25):** Phases 1–4 are built in the repo (`packages/shared`, `packages/api`, `packages/app`, 27 unit tests). Tested in a desktop browser with live OpenSky data; **not yet tested on a real phone or deployed**. CelesTrak was down during the build, so the API falls back to a short list of bright satellites. Next: Phase 5 (night mode + recorder/replay).
+
 Principle: **always have a working demo**. Each phase ends with something that runs on a real phone.
 
 ## Phase 0: Before the clock starts (prep, ~2 h)

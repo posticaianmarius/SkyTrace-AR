@@ -1,0 +1,19 @@
+{
+  "name": "@skytrace/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/node.ts",
+    "start": "tsx src/node.ts",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.11",
+    "@skytrace/shared": "*",
+    "hono": "^4.13.22"
+  },
+  "devDependencies": {
+    "wrangler": "^4.168.0"
+  }
+}

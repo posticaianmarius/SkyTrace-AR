@@ -1,1 +1,7 @@
 Plan/.obsidian/workspace*.json
+node_modules/
+dist/
+.cache/
+.wrangler/
+.dev.vars
+.env

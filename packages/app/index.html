@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <title>SkyTrace AR</title>
+  </head>
+  <body>
+    <video id="video" playsinline muted></video>
+    <canvas id="overlay"></canvas>
+
+    <header id="hud">
+      <div id="heading">—</div>
+      <div id="status"></div>
+    </header>
+
+    <div id="toast" hidden></div>
+
+    <div id="details" hidden></div>
+
+    <nav id="toolbar">
+      <button id="btn-calibrate" type="button">Calibrate</button>
+      <button id="btn-eval" type="button">Eval</button>
+      <button id="btn-layers" type="button">Layers</button>
+      <button id="btn-night" type="button" aria-pressed="false">Night</button>
+    </nav>
+
+    <div id="layers" class="sheet" hidden>
+      <h3>Layers</h3>
+      <label><input type="checkbox" data-layer="aircraft" checked /> Aircraft (ADS-B)</label>
+      <label><input type="checkbox" data-group="visual" checked /> Bright satellites</label>
+      <label><input type="checkbox" data-group="stations" checked /> Space stations</label>
+      <label><input type="checkbox" data-group="starlink" /> Starlink (thousands)</label>
+      <label><input type="checkbox" data-group="gps-ops" /> GPS</label>
+      <label><input type="checkbox" data-layer="bodies" checked /> Sun, Moon, planets</label>
+      <button type="button" class="close">Done</button>
+    </div>
+
+    <div id="eval-sheet" class="sheet" hidden>
+      <h3>Accuracy eval</h3>
+      <p>Tap exactly where a labelled object <b>really</b> is in the camera image. Each tap logs the error between our label and the real position.</p>
+      <p id="eval-stats"></p>
+      <div class="row">
+        <button type="button" id="eval-download">Download CSV</button>
+        <button type="button" id="eval-clear">Clear</button>
+        <button type="button" class="close">Stop</button>
+      </div>
+    </div>
+
+    <div id="calib-sheet" class="sheet" hidden>
+      <h3>Calibrate</h3>
+      <p>Tap exactly on a real object you can see: the <b>Moon</b>, a bright planet, or a labelled plane. Never look at the Sun; aim the camera only. Two taps on objects far apart also fix the lens field of view.</p>
+      <p id="calib-stats"></p>
+      <div class="row">
+        <button type="button" id="calib-reset">Reset</button>
+        <button type="button" class="close">Done</button>
+      </div>
+    </div>
+
+    <section id="start">
+      <h1>SkyTrace AR</h1>
+      <p>Point your phone at the sky and see every plane and satellite labelled.</p>
+      <button id="btn-start" type="button">Start</button>
+      <p class="small">Needs camera, location and motion access. Nothing is stored on a server.</p>
+      <p class="small" id="start-hint"></p>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

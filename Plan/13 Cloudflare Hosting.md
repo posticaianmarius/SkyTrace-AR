@@ -7,9 +7,10 @@ Back to [[00 Home]] · Why free: [[12 Platforms and Cost]] · Fits into [[03 Arc
 
 ## Layout
 ```
-sky.<yourdomain>          → Cloudflare Pages (the PWA: HTML/JS/CSS)
-sky.<yourdomain>/api/*    → Cloudflare Worker (Pages Functions)
+sky.<yourdomain>          → one Cloudflare Worker serving the built PWA as static assets
+sky.<yourdomain>/api/*    → the same Worker's Hono routes (run_worker_first)
 ```
+(Implemented this way in `packages/api/wrangler.toml`: a single Worker with static assets instead of a separate Pages project, so one deploy covers both.)
 The API is a **Hono** app in TypeScript. Locally it runs on **Node.js**; in production the same code is deployed as a Cloudflare Worker and routed under `sky.<yourdomain>/api/*`, so the site and API share one origin and there are **no CORS issues**. Details: [[17 Tech Stack]]
 
 ## Why HTTPS matters
