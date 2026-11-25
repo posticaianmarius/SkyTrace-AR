@@ -24,10 +24,17 @@ interface AdsbLolAc {
 export async function fetchAdsbLol(lat: number, lon: number, radiusKm: number): Promise<Aircraft[]> {
   const nm = Math.min(250, Math.round(radiusKm / 1.852));
   const url = `https://api.adsb.lol/v2/point/${lat.toFixed(3)}/${lon.toFixed(3)}/${nm}`;
-  const res = await fetch(url, {
-    headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
-    signal: AbortSignal.timeout(8000),
-  });
+  const get = () =>
+    fetch(url, {
+      headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
+      signal: AbortSignal.timeout(8000),
+    });
+  let res = await get();
+  if (res.status === 429) {
+    // adsb.lol rate-limits shared cloud IPs; one short retry often succeeds
+    await new Promise((r) => setTimeout(r, 800));
+    res = await get();
+  }
   if (!res.ok) throw new Error(`adsb.lol HTTP ${res.status}`);
   const json = (await res.json()) as { ac?: AdsbLolAc[]; now?: number };
   const nowSec = (json.now ?? Date.now()) / 1000;

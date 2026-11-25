@@ -35,22 +35,29 @@ export interface CalState {
 const KEY = 'skytrace:calibration';
 const MAX_TAPS = 4;
 
+/**
+ * Only the FOV scale survives a restart: it is a property of the camera lens.
+ * The yaw offset corrects THIS session's compass error (local metal, magnetometer
+ * state) and the gyro's arbitrary zero, so reusing it later shifts the sky sideways.
+ */
 export function loadCalibration(): CalState {
+  const fresh: CalState = { yawDeg: 0, fovScale: 1, taps: [], residualDeg: NaN };
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const s = JSON.parse(raw) as Pick<CalState, 'yawDeg' | 'fovScale'>;
-      return { yawDeg: s.yawDeg ?? 0, fovScale: s.fovScale ?? 1, taps: [], residualDeg: NaN };
+      const s = JSON.parse(raw) as Partial<Pick<CalState, 'fovScale'>>;
+      const f = Number(s.fovScale);
+      if (Number.isFinite(f) && f > 0) fresh.fovScale = f;
     }
   } catch {
     /* ignore */
   }
-  return { yawDeg: 0, fovScale: 1, taps: [], residualDeg: NaN };
+  return fresh;
 }
 
 export function saveCalibration(s: CalState) {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ yawDeg: s.yawDeg, fovScale: s.fovScale }));
+    localStorage.setItem(KEY, JSON.stringify({ fovScale: s.fovScale }));
   } catch {
     /* ignore */
   }

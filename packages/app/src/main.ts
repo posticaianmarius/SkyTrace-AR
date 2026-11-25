@@ -8,6 +8,7 @@ import { EvalLog } from './eval/logger';
 import { computeBodies, type BodiesResult } from './sats/bodies';
 import { Satellites } from './sats/satellites';
 import { Location } from './sensors/location';
+import { declinationDeg } from './sensors/declination';
 import { Orientation, screenAngle } from './sensors/orientation';
 import type { SkyObject } from './types';
 import { Overlay, type Placed } from './ui/overlay';
@@ -61,6 +62,7 @@ $('btn-start').addEventListener('click', async () => {
   loc.onChange((p) => {
     sats.setObserver(p);
     aircraft.setObserver(p);
+    orientation.setDeclination(declinationDeg(p.lat, p.lon));
     bodiesAt = 0;
   });
   sats.reload();
@@ -70,8 +72,8 @@ $('btn-start').addEventListener('click', async () => {
     toast(camOk ? 'No motion sensors: drag to look around.' : 'Desktop mode: drag to look around, scroll to zoom.', 5000);
   } else if (omode === 'relative') {
     toast('No compass found: calibrate on the Moon or a plane.', 5000);
-  } else if (calib.yawDeg === 0) {
-    toast('Tip: tap Calibrate and tap the Moon or a plane for best accuracy.', 5000);
+  } else {
+    toast('Hold the phone still for a second to find north. For best accuracy, Calibrate on the Moon or a plane.', 6000);
   }
 });
 
@@ -115,6 +117,7 @@ function frame() {
 
   const visibleBodies = showBodies ? bodies.objects.filter((o) => o.elDeg > -1) : [];
   objects = [...visibleBodies, ...sats.objects(now), ...aircraft.objects(now)];
+  autoAim();
   placed = overlay.draw(cam, objects);
 
   frames++;
@@ -132,6 +135,30 @@ function frame() {
 }
 requestAnimationFrame(frame);
 
+/**
+ * Desktop only: once planes arrive, turn the view toward the busiest part of
+ * the sky (until the user drags). Without this the default view can easily
+ * contain no planes, since distant aircraft sit only a few degrees up.
+ */
+let autoAimed = false;
+function autoAim() {
+  if (autoAimed || orientation.mode !== 'simulated' || orientation.simTouched) return;
+  const planes = objects.filter((o) => o.kind === 'aircraft' && o.elDeg > 1);
+  if (planes.length === 0) return;
+  autoAimed = true;
+  const bins = new Array<number>(12).fill(0);
+  for (const p of planes) bins[Math.floor(p.azDeg / 30) % 12]! += 1;
+  const best = bins.indexOf(Math.max(...bins));
+  const inBin = planes.filter((p) => Math.floor(p.azDeg / 30) % 12 === best).map((p) => p.elDeg).sort((a, b) => a - b);
+  const el = inBin[Math.floor(inBin.length / 2)] ?? 8;
+  orientation.lookAt(best * 30 + 15, Math.max(4, Math.min(30, el)));
+}
+
+function inView(o: SkyObject): boolean {
+  const p = cam.project(o.dir);
+  return p.front && p.x >= 0 && p.x <= cam.W && p.y >= 0 && p.y <= cam.H;
+}
+
 function updateHud(now: number) {
   const center = enuToAzEl(cam.unproject(cam.W / 2, cam.H / 2));
   hudHeading.textContent = `${compass(center.azDeg)} ${center.azDeg.toFixed(0).padStart(3, '0')}°  El ${center.elDeg.toFixed(0)}°`;
@@ -140,12 +167,45 @@ function updateHud(now: number) {
   const acAge = aircraft.dataAgeSec(nowSec);
   const satObjs = objects.filter((o) => o.kind === 'sat');
   const lines = [
-    `${loc.source === 'gps' ? `GPS ±${Math.round(loc.accuracyM ?? 0)} m` : loc.source === 'url' ? 'location: URL' : 'location: default'} · ${orientation.mode} · ${fps.toFixed(0)} fps`,
-    `✈ ${objects.filter((o) => o.kind === 'aircraft').length}${aircraft.source ? ` (${aircraft.source}${Number.isFinite(acAge) ? `, ${Math.round(acAge)} s old` : ''})` : ''}${aircraft.error && aircraft.source === 'none' ? ' error' : ''}`,
+    `${loc.source === 'gps' ? `GPS ±${Math.round(loc.accuracyM ?? 0)} m` : loc.source === 'url' ? 'location: URL' : 'location: default'} · ${compassLabel()} · ${fps.toFixed(0)} fps`,
+    `✈ ${objects.filter((o) => o.kind === 'aircraft' && inView(o)).length} in view / ${objects.filter((o) => o.kind === 'aircraft').length}${aircraft.source ? ` (${aircraft.source}${Number.isFinite(acAge) ? `, ${Math.round(acAge)} s old` : ''})` : ''}${aircraft.error && aircraft.source === 'none' ? ' error' : ''}`,
     `🛰 ${satObjs.length} up / ${sats.total}${sats.source === 'fallback' ? ' (fallback list)' : ''} · ${satObjs.filter((o) => o.visible).length} visible`,
     `cal ${calib.yawDeg >= 0 ? '+' : ''}${calib.yawDeg.toFixed(1)}° ×${calib.fovScale.toFixed(3)}${mode !== 'view' ? ` · ${mode.toUpperCase()}` : ''}`,
   ];
+  if (DEBUG) {
+    const d = orientation.debug;
+    const f = (x: number | null, n = 1) => (x == null || !Number.isFinite(x) ? '–' : x.toFixed(n));
+    lines.push(
+      `hdg ${f(d.heading)} acc ${f(orientation.accuracyDeg, 0)} alpha ${f(d.alpha)} camEl ${f(d.camEl, 0)} ${d.still ? 'still' : 'moving'} ${d.accepted ? 'used' : 'skipped'}`,
+      `offset ${f(orientation.compassOffset)} decl ${f(orientation.declinationDeg)} ${orientation.mode}/${orientation.compassState}`,
+    );
+  }
   hudStatus.textContent = lines.join('\n');
+
+  if (orientation.compassPoor && !poorCompassToastShown) {
+    poorCompassToastShown = true;
+    toast('Compass is inaccurate: wave the phone in a figure-8, away from metal.', 6000);
+  }
+}
+
+let poorCompassToastShown = false;
+/** ?debug=1 shows raw compass values in the status area. */
+const DEBUG = new URLSearchParams(location.search).has('debug');
+
+function compassLabel(): string {
+  if (orientation.mode === 'simulated') return 'simulated';
+  if (orientation.mode === 'relative') return 'no compass';
+  const acc = orientation.accuracyDeg != null && orientation.accuracyDeg >= 0 ? ` ±${Math.round(orientation.accuracyDeg)}°` : '';
+  switch (orientation.compassState) {
+    case 'frozen':
+      return 'compass locked (calibrated)';
+    case 'locked':
+      return `compass ok${acc}`;
+    case 'settling':
+      return `compass settling: hold still${acc}`;
+    default:
+      return 'waiting for compass';
+  }
 }
 
 function compass(az: number) {
@@ -189,6 +249,8 @@ function onTap(x: number, y: number) {
       target: hit.obj.dir,
       label: hit.obj.label,
     });
+    // From now on trust the gyro + this calibration; the compass would only add drift.
+    orientation.setCompassFrozen(true);
     toast(`Calibrated on ${hit.obj.label} (was ${hit.deg.toFixed(1)}° off)`);
     updateCalibStats();
     return;
@@ -274,6 +336,7 @@ document.querySelectorAll('.sheet .close').forEach((b) =>
 
 $('calib-reset').addEventListener('click', () => {
   calib = resetCalibration();
+  orientation.setCompassFrozen(false);
   updateCalibStats();
   toast('Calibration reset');
 });

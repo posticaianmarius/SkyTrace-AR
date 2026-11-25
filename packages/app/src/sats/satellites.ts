@@ -15,14 +15,20 @@ import type { SatState, SatWorkerIn, SatWorkerOut, SkyObject } from '../types';
 const CACHE_HOURS = 6;
 
 /**
- * Our API first. If it fails (CelesTrak down, or the server's IP is rate
- * limited), fetch directly from the phone: CelesTrak, then the bright-satellite
- * fallback list (both allow browser requests).
+ * Our API first. If it fails, or only has the reduced fallback list (the
+ * server's IP is often refused by CelesTrak while the phone's is not), fetch
+ * CelesTrak directly from the phone, then the bright-satellite fallback list
+ * (both allow browser requests).
  */
 async function fetchGroup(group: TleGroup): Promise<TleResponse> {
+  let apiFallback: TleResponse | null = null;
   try {
     const res = await fetch(`/api/tle?group=${group}`);
-    if (res.ok) return (await res.json()) as TleResponse;
+    if (res.ok) {
+      const data = (await res.json()) as TleResponse;
+      if (data.source !== 'fallback') return data;
+      apiFallback = data;
+    }
   } catch {
     /* fall through */
   }
@@ -37,6 +43,7 @@ async function fetchGroup(group: TleGroup): Promise<TleResponse> {
   } catch {
     /* fall through */
   }
+  if (apiFallback) return apiFallback;
   if (group !== 'visual' && group !== 'stations') throw new Error(`TLE ${group} unavailable`);
   return fetchBrightTles(group);
 }
