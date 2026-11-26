@@ -4,7 +4,7 @@
  * measurement. Exported as CSV.
  */
 import { angleBetweenDeg, enuToAzEl, type Vec3 } from '@skytrace/shared';
-import type { SkyObject } from '../types';
+import type { SkyReference } from '../types';
 
 export interface EvalRecord {
   time: string;
@@ -35,7 +35,7 @@ export class EvalLog {
     }
   }
 
-  add(obj: SkyObject, tapDir: Vec3, ctx: { yawOffsetDeg: number; fovScale: number; calibrated: boolean; orientation: string }): EvalRecord {
+  add(obj: SkyReference, tapDir: Vec3, ctx: { yawOffsetDeg: number; fovScale: number; calibrated: boolean; orientation: string }): EvalRecord {
     const tap = enuToAzEl(tapDir);
     const r: EvalRecord = {
       time: new Date().toISOString(),

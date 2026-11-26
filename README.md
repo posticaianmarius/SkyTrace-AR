@@ -80,6 +80,12 @@ A cron trigger refreshes CelesTrak TLEs every 3 hours so phones normally never h
 4. Calibration: tap a real object (Moon, planet, plane). One tap fixes the compass offset; two taps far apart also fit the lens field of view.
 5. Eval: tap where an object really is; the app logs the angular error and exports CSV.
 
+## Constellations
+
+Enable **Layers → Constellations** to see star patterns and names after twilight. **Show all** previews the layer in daylight. In **Calibrate** or **Eval**, pick a named star and tap its actual position in the camera view. For an independent accuracy measurement, use different stars for calibration and evaluation.
+
+The app bundles coordinates and Western line figures from [d3-celestial](https://github.com/ofrohn/d3-celestial/tree/7e720a3de062059d4c5400a379146a601d9010e0/data). The catalog uses `constellations.lines.json` for the paths, `constellations.json` for names, and `stars.6.json` with `starnames.json` for named stars of magnitude 2.5 or brighter. The [BSD 3-Clause license](packages/app/public/d3-celestial-license.txt) ships with the app.
+
 ## Status
 
 Done: phases 1 to 4 of the plan (skeleton, satellites, aircraft, calibration + eval).

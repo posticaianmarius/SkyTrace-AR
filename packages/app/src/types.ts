@@ -19,6 +19,8 @@ export interface SkyObject {
   visible: boolean;
 }
 
+export type SkyReference = Pick<SkyObject, 'id' | 'label' | 'dir' | 'azDeg' | 'elDeg'> & { kind: SkyKind | 'star' };
+
 /** Messages to/from the SGP4 worker. */
 export type SatWorkerIn =
   | { type: 'tles'; sats: Array<{ name: string; line1: string; line2: string }> }

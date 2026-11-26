@@ -10,7 +10,8 @@ import { Satellites } from './sats/satellites';
 import { Location } from './sensors/location';
 import { declinationDeg } from './sensors/declination';
 import { Orientation, screenAngle } from './sensors/orientation';
-import type { SkyObject } from './types';
+import { computeStarSky, type StarSky } from './stars/constellations';
+import type { SkyObject, SkyReference } from './types';
 import { Overlay, type Placed } from './ui/overlay';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -21,6 +22,8 @@ const hudHeading = $('heading');
 const hudStatus = $('status');
 const toastEl = $('toast');
 const details = $('details');
+const constellationToggle = $<HTMLInputElement>('layer-constellations');
+const referencePickers = { calibrate: $<HTMLSelectElement>('calib-reference'), eval: $<HTMLSelectElement>('eval-reference') };
 
 type Mode = 'view' | 'calibrate' | 'eval';
 
@@ -42,7 +45,9 @@ let showBodies = true;
  * like visible ones (full-size filled marker, bright colour, label priority).
  */
 const SHOW_ALL_KEY = 'skytrace:showAll';
+const CONSTELLATIONS_KEY = 'skytrace:constellations';
 let showAll = readFlag(SHOW_ALL_KEY);
+constellationToggle.checked = readFlag(CONSTELLATIONS_KEY);
 let satsVisibleByEye = 0;
 
 function showAtFullStrength(o: SkyObject): SkyObject {
@@ -69,6 +74,8 @@ function writeFlag(key: string, on: boolean) {
 let longFovDeg = DEFAULT_LONG_FOV_DEG;
 let bodies: BodiesResult = { objects: [], sunElDeg: 0 };
 let bodiesAt = 0;
+let stars: StarSky | null = null;
+let starsAt = -Infinity;
 let objects: SkyObject[] = [];
 let placed: Placed[] = [];
 let lastHud = 0;
@@ -95,6 +102,7 @@ $('btn-start').addEventListener('click', async () => {
     aircraft.setObserver(p);
     orientation.setDeclination(declinationDeg(p.lat, p.lon));
     bodiesAt = 0;
+    starsAt = -Infinity;
   });
   sats.reload();
 
@@ -140,7 +148,7 @@ function frame() {
     longFovDeg,
   });
 
-  if (now - bodiesAt > 1000) {
+  if(now - bodiesAt >= 1000 || now < bodiesAt) {
     bodies = computeBodies(loc.current, new Date(now));
     sats.sunElDeg = bodies.sunElDeg;
     bodiesAt = now;
@@ -151,8 +159,17 @@ function frame() {
   // Counted before "Show all" so the status line keeps reporting what the eye can see.
   satsVisibleByEye = objects.filter((o) => o.kind === 'sat' && o.visible).length;
   if (showAll) objects = objects.map(showAtFullStrength);
+  const drawStars = constellationToggle.checked && (showAll || bodies.sunElDeg < -6);
+  if(drawStars && (!stars || now - starsAt >= 1000 || now < starsAt)) {
+    stars = computeStarSky(loc.current, now);
+    starsAt = now;
+    updateReferencePickers(stars.references);
+  } else if(!drawStars && stars) {
+    stars = null;
+    updateReferencePickers([]);
+  }
   autoAim();
-  placed = overlay.draw(cam, objects);
+  placed = overlay.draw(cam, objects, stars, mode === 'view' ? undefined : selectedStar(mode));
 
   frames++;
   const t = performance.now();
@@ -269,10 +286,36 @@ function nearestByAngle(x: number, y: number, maxDeg: number): { obj: SkyObject;
   return best;
 }
 
+function selectedStar(mode: 'calibrate' | 'eval'): SkyReference | undefined {
+  const id = referencePickers[mode].value;
+  return id ? stars?.references.find((star) => star.id === id) : undefined;
+}
+
+function tapReference(mode: 'calibrate' | 'eval', x: number, y: number, maxDeg: number) {
+  const picker = referencePickers[mode];
+  if(!picker.value) return nearestByAngle(x, y, maxDeg);
+  const star = selectedStar(mode);
+  return star ? { obj: star, deg: angleBetweenDeg(cam.unproject(x, y), star.dir) } : null;
+}
+
+function updateReferencePickers(references: SkyReference[]) {
+  for(const picker of Object.values(referencePickers)) {
+    const current = picker.value;
+    const choices = references.map(({ id, label }) => ({ id, label }));
+    if(current && !choices.some((star) => star.id === current)) {
+      const label = picker.selectedOptions[0]!.text.replace(/ \(unavailable\)$/, '');
+      choices.push({ id: current, label: `${label} (unavailable)` });
+    }
+    if(picker.options.length === choices.length + 1 && choices.every(({ id, label }, i) => picker.options[i + 1]?.value === id && picker.options[i + 1]?.text === label)) continue;
+    picker.replaceChildren(new Option('Nearest labelled object', ''), ...choices.map(({ id, label }) => new Option(label, id)));
+    picker.value = current;
+  }
+}
+
 function onTap(x: number, y: number) {
   if (mode === 'calibrate') {
-    const hit = nearestByAngle(x, y, 30);
-    if (!hit) return toast('No known object near that tap.');
+    const hit = tapReference(mode, x, y, 30);
+    if(!hit) return toast(referencePickers[mode].value ? 'That star is unavailable. Choose another reference.' : 'No known object near that tap.');
     calib = addTap(calib, {
       x,
       y,
@@ -290,8 +333,8 @@ function onTap(x: number, y: number) {
     return;
   }
   if (mode === 'eval') {
-    const hit = nearestByAngle(x, y, 15);
-    if (!hit) return toast('No labelled object within 15° of that tap.');
+    const hit = tapReference(mode, x, y, 15);
+    if(!hit) return toast(referencePickers[mode].value ? 'That star is unavailable. Choose another reference.' : 'No labelled object within 15° of that tap.');
     const r = evalLog.add(hit.obj, cam.unproject(x, y), {
       yawOffsetDeg: calib.yawDeg,
       fovScale: calib.fovScale,
@@ -389,7 +432,13 @@ $('eval-clear').addEventListener('click', () => {
   updateEvalStats();
 });
 
-sheets.layers.querySelectorAll<HTMLInputElement>('input').forEach((input) =>
+constellationToggle.addEventListener('change', () => {
+  writeFlag(CONSTELLATIONS_KEY, constellationToggle.checked);
+  overlay.resetConstellationReveals();
+  if(constellationToggle.checked && !showAll && bodies.sunElDeg >= -6) toast('Constellations appear after twilight. Use Show all to preview.');
+});
+
+sheets.layers.querySelectorAll<HTMLInputElement>('input[data-group], input[data-layer="aircraft"], input[data-layer="bodies"]').forEach((input) =>
   input.addEventListener('change', () => {
     const group = input.dataset.group as TleGroup | undefined;
     if (group) {

@@ -53,4 +53,28 @@ describe('CameraModel', () => {
     const p = cam.project(azElToEnu(110, 10));
     expect(p.x).toBeCloseTo(200, 6);
   });
+
+  it('clips a sky segment across the viewport even when both stars are offscreen', () => {
+    const cam = camera(0, 15);
+    const segment = cam.projectSkySegment(azElToEnu(330, 15), azElToEnu(30, 15));
+    expect(segment?.start.x).toBeCloseTo(0);
+    expect(segment?.end.x).toBeCloseTo(cam.W);
+  });
+
+  it('clips the part of a segment below the horizon', () => {
+    const cam = camera(0, 5);
+    const segment = cam.projectSkySegment(azElToEnu(0, 10), azElToEnu(0, -10));
+    expect(segment?.end.y).toBeCloseTo(cam.project(azElToEnu(0, 0)).y);
+    expect(cam.projectSkySegment(azElToEnu(0, -2), azElToEnu(5, -8))).toBeNull();
+  });
+
+  it('keeps the visible end of a segment with a star behind the camera', () => {
+    const cam = camera(0, 15);
+    const a = azElToEnu(0, 15);
+    const b = azElToEnu(95, 15);
+    expect(cam.project(b).front).toBe(false);
+    const segment = cam.projectSkySegment(a, b);
+    expect(segment?.start.x).toBeCloseTo(cam.W / 2);
+    expect(segment?.end.x).toBeCloseTo(cam.W);
+  });
 });

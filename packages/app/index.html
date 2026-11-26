@@ -41,12 +41,14 @@
       <label><input type="checkbox" data-group="gps-ops" /> GPS</label>
       <label><input type="checkbox" data-group="satnogs" /> All tracked (~1,700, mostly too faint to see)</label>
       <label><input type="checkbox" data-layer="bodies" checked /> Sun, Moon, planets</label>
+      <label><input type="checkbox" id="layer-constellations" /> Constellations</label>
       <button type="button" class="close">Done</button>
     </div>
 
     <div id="eval-sheet" class="sheet" hidden>
       <h3>Accuracy eval</h3>
-      <p>Tap exactly where a labelled object <b>really</b> is in the camera image. Each tap logs the error between our label and the real position.</p>
+      <p>Tap where the chosen star or a nearby labelled object really is in the camera image to measure the angular error.</p>
+      <label for="eval-reference">Reference <select id="eval-reference"><option value="">Nearest labelled object</option></select></label>
       <p id="eval-stats"></p>
       <div class="row">
         <button type="button" id="eval-download">Download CSV</button>
@@ -57,7 +59,8 @@
 
     <div id="calib-sheet" class="sheet" hidden>
       <h3>Calibrate</h3>
-      <p>Tap exactly on a real object you can see: the <b>Moon</b>, a bright planet, or a labelled plane. Never look at the Sun; aim the camera only. Two taps on objects far apart also fix the lens field of view.</p>
+      <p>Choose a star by name or use a nearby labelled object, then tap its real position in the camera image. Never look directly at the Sun. Two taps on objects far apart can also adjust the lens field of view.</p>
+      <label for="calib-reference">Reference <select id="calib-reference"><option value="">Nearest labelled object</option></select></label>
       <p id="calib-stats"></p>
       <div class="row">
         <button type="button" id="calib-reset">Reset</button>

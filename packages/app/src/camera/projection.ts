@@ -73,6 +73,27 @@ export class CameraModel {
     };
   }
 
+  /** Clip a sky segment to the horizon and the camera frustum before dividing by depth. */
+  projectSkySegment(a: Vec3, b: Vec3) {
+    const [ax, ay, az] = apply(this.M, a);
+    const [bx, by, bz] = apply(this.M, b);
+    const da = -az, db = -bz;
+    const sx = 2 * this.F / this.W, sy = 2 * this.F / this.H;
+    let from = 0, to = 1;
+    const bounds = [[a[2], b[2]], [da - 1e-6, db - 1e-6], [da + sx * ax, db + sx * bx], [da - sx * ax, db - sx * bx], [da + sy * ay, db + sy * by], [da - sy * ay, db - sy * by]] as const;
+    for(const [start, end] of bounds) {
+      if(start < 0 && end < 0) return null;
+      if(start < 0) from = Math.max(from, start / (start - end));
+      if(end < 0) to = Math.min(to, start / (start - end));
+    }
+    if(from >= to) return null;
+    const point = (t: number) => {
+      const depth = da + (db - da) * t;
+      return { x: this.W / 2 + this.F * (ax + (bx - ax) * t) / depth, y: this.H / 2 - this.F * (ay + (by - ay) * t) / depth };
+    };
+    return { start: point(from), end: point(to) };
+  }
+
   /** Screen pixel -> world unit direction (with calibration). */
   unproject(x: number, y: number): Vec3 {
     return rayToWorld(this.M, this.F, this.W, this.H, x, y);
