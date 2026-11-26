@@ -240,6 +240,7 @@ export class Orientation {
     });
     window.addEventListener('keydown', (e) => {
       if (this.mode !== 'simulated') return;
+      if(e.target instanceof HTMLElement && e.target.closest('button, input, select, summary')) return;
       const step = e.shiftKey ? 10 : 2;
       if (e.key === 'ArrowLeft') this.simAz = normalizeDeg(this.simAz - step);
       else if (e.key === 'ArrowRight') this.simAz = normalizeDeg(this.simAz + step);

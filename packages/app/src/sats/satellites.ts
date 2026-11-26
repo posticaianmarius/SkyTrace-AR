@@ -135,6 +135,7 @@ export class Satellites {
       const isStation = /ISS|TIANHE|CSS/.test(s.name);
       out.push({
         kind: 'sat',
+        station: isStation,
         id: `sat-${s.norad}`,
         label: prettyName(s.name),
         sub: `${Math.round(s.altKm)} km alt · ${Math.round(s.rangeKm)} km${visible ? ' · visible' : s.sunlit ? '' : ' · in shadow'}`,

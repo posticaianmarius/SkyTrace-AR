@@ -12,6 +12,8 @@ import { declinationDeg } from './sensors/declination';
 import { Orientation, screenAngle } from './sensors/orientation';
 import { computeStarSky, type StarSky } from './stars/constellations';
 import type { SkyObject, SkyReference } from './types';
+import { ConstellationArt } from './ui/constellation-art';
+import { objectCategory } from './ui/markers';
 import { Overlay, type Placed } from './ui/overlay';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,18 +21,22 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const video = $<HTMLVideoElement>('video');
 const canvas = $<HTMLCanvasElement>('overlay');
 const hudHeading = $('heading');
+const hudElevation = $('elevation');
 const hudStatus = $('status');
+const skyStatus = $<HTMLDetailsElement>('sky-status');
 const toastEl = $('toast');
 const details = $('details');
 const constellationToggle = $<HTMLInputElement>('layer-constellations');
+const constellationArtToggle = $<HTMLInputElement>('layer-constellation-art');
 const referencePickers = { calibrate: $<HTMLSelectElement>('calib-reference'), eval: $<HTMLSelectElement>('eval-reference') };
 
-type Mode = 'view' | 'calibrate' | 'eval';
+type Mode = 'view' | 'calibrate' | 'eval' | 'layers';
 
 const orientation = new Orientation();
 const loc = new Location();
 const cam = new CameraModel();
 const overlay = new Overlay(canvas);
+const constellationArt = new ConstellationArt($('constellation-art'));
 const sats = new Satellites();
 const aircraft = new AircraftFeed();
 const evalLog = new EvalLog();
@@ -46,8 +52,11 @@ let showBodies = true;
  */
 const SHOW_ALL_KEY = 'skytrace:showAll';
 const CONSTELLATIONS_KEY = 'skytrace:constellations';
+const CONSTELLATION_ART_OFF_KEY = 'skytrace:constellationArtOff';
 let showAll = readFlag(SHOW_ALL_KEY);
 constellationToggle.checked = readFlag(CONSTELLATIONS_KEY);
+constellationArtToggle.checked = !readFlag(CONSTELLATION_ART_OFF_KEY);
+constellationArtToggle.disabled = !constellationToggle.checked;
 let satsVisibleByEye = 0;
 
 function showAtFullStrength(o: SkyObject): SkyObject {
@@ -90,12 +99,15 @@ if (!window.isSecureContext) {
     'Not on HTTPS: camera and motion sensors will be blocked. Use the https:// address (npm run tunnel).';
 }
 
-$('btn-start').addEventListener('click', async () => {
+$('btn-start').addEventListener('click', async (event) => {
   // Order matters on iOS: permission requests must start inside the tap handler.
   const orientationReady = orientation.start();
   const cameraReady = startCamera(video);
   loc.start();
   $('start').hidden = true;
+  $('hud').inert = false;
+  $('toolbar').inert = false;
+  if(event.detail === 0) $('btn-layers').focus();
 
   loc.onChange((p) => {
     sats.setObserver(p);
@@ -107,6 +119,7 @@ $('btn-start').addEventListener('click', async () => {
   sats.reload();
 
   const [omode, camOk] = await Promise.all([orientationReady, cameraReady]);
+  $('view-source').textContent = camOk ? 'Camera' : 'Preview';
   if (omode === 'simulated') {
     toast(camOk ? 'No motion sensors: drag to look around.' : 'Desktop mode: drag to look around, scroll to zoom.', 5000);
   } else if (omode === 'relative') {
@@ -161,7 +174,7 @@ function frame() {
   if (showAll) objects = objects.map(showAtFullStrength);
   const drawStars = constellationToggle.checked && (showAll || bodies.sunElDeg < -6);
   if(drawStars && (!stars || now - starsAt >= 1000 || now < starsAt)) {
-    stars = computeStarSky(loc.current, now);
+    stars = computeStarSky(loc.current, now, constellationArtToggle.checked);
     starsAt = now;
     updateReferencePickers(stars.references);
   } else if(!drawStars && stars) {
@@ -169,7 +182,8 @@ function frame() {
     updateReferencePickers([]);
   }
   autoAim();
-  placed = overlay.draw(cam, objects, stars, mode === 'view' ? undefined : selectedStar(mode));
+  constellationArt.draw(cam, mode === 'calibrate' || mode === 'eval' ? undefined : stars?.art);
+  placed = overlay.draw(cam, objects, stars, mode === 'calibrate' || mode === 'eval' ? selectedStar(mode) : undefined);
 
   frames++;
   const t = performance.now();
@@ -212,12 +226,21 @@ function inView(o: SkyObject): boolean {
 
 function updateHud(now: number) {
   const center = enuToAzEl(cam.unproject(cam.W / 2, cam.H / 2));
-  hudHeading.textContent = `${compass(center.azDeg)} ${center.azDeg.toFixed(0).padStart(3, '0')}°  El ${center.elDeg.toFixed(0)}°`;
+  hudHeading.textContent = `${compass(center.azDeg)} ${Math.round(center.azDeg) % 360}°`;
+  hudElevation.textContent = `${Math.round(center.elDeg)}° el`;
+
+  if(orientation.compassPoor && !poorCompassToastShown) {
+    poorCompassToastShown = true;
+    toast('Compass is inaccurate: wave the phone in a figure-8, away from metal.', 6000);
+  }
+
+  if(!skyStatus.open && !DEBUG) return;
 
   const nowSec = now / 1000;
   const acAge = aircraft.dataAgeSec(nowSec);
   const satObjs = objects.filter((o) => o.kind === 'sat');
   const lines = [
+    video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA ? 'Live camera' : 'Sky preview',
     `${loc.source === 'gps' ? `GPS ±${Math.round(loc.accuracyM ?? 0)} m` : loc.source === 'url' ? 'location: URL' : 'location: default'} · ${compassLabel()} · ${fps.toFixed(0)} fps`,
     `✈ ${objects.filter((o) => o.kind === 'aircraft' && inView(o)).length} in view / ${objects.filter((o) => o.kind === 'aircraft').length}${aircraft.source ? ` (${aircraft.source}${Number.isFinite(acAge) ? `, ${Math.round(acAge)} s old` : ''})` : ''}${aircraft.error && aircraft.source === 'none' ? ' error' : ''}`,
     `🛰 ${satObjs.length} up / ${sats.total}${sats.source === 'fallback' ? ' (fallback list)' : ''} · ${satsVisibleByEye} visible`,
@@ -232,11 +255,6 @@ function updateHud(now: number) {
     );
   }
   hudStatus.textContent = lines.join('\n');
-
-  if (orientation.compassPoor && !poorCompassToastShown) {
-    poorCompassToastShown = true;
-    toast('Compass is inaccurate: wave the phone in a figure-8, away from metal.', 6000);
-  }
 }
 
 let poorCompassToastShown = false;
@@ -313,6 +331,11 @@ function updateReferencePickers(references: SkyReference[]) {
 }
 
 function onTap(x: number, y: number) {
+  if(skyStatus.open) {
+    skyStatus.open = false;
+    return;
+  }
+  if(mode === 'layers') return setMode('view');
   if (mode === 'calibrate') {
     const hit = tapReference(mode, x, y, 30);
     if(!hit) return toast(referencePickers[mode].value ? 'That star is unavailable. Choose another reference.' : 'No known object near that tap.');
@@ -359,20 +382,49 @@ function onTap(x: number, y: number) {
   showDetails(best?.obj ?? null);
 }
 
+const distanceFormat = new Intl.NumberFormat(undefined, { notation: 'compact', maximumSignificantDigits: 4 });
+
 function showDetails(o: SkyObject | null) {
-  if (!o) {
+  if(!o) {
     details.hidden = true;
     return;
   }
   details.hidden = false;
-  details.innerHTML = '';
+  details.dataset.kind = o.kind;
+  const header = document.createElement('header');
+  header.className = 'object-header';
+  const identity = document.createElement('div');
+  const category = document.createElement('span');
+  category.className = 'object-category';
+  category.textContent = objectCategory(o);
   const h = document.createElement('h3');
   h.textContent = o.label;
-  const p1 = document.createElement('p');
-  p1.textContent = o.sub;
-  const p2 = document.createElement('p');
-  p2.textContent = `Azimuth ${o.azDeg.toFixed(1)}° · Elevation ${o.elDeg.toFixed(1)}° · ${o.rangeKm < 1e5 ? `${o.rangeKm.toFixed(0)} km` : ''}`;
-  details.append(h, p1, p2);
+  identity.append(category, h);
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'icon-button';
+  close.setAttribute('aria-label', 'Close object details');
+  close.textContent = '×';
+  close.addEventListener('click', () => {
+    overlay.selectedId = null;
+    showDetails(null);
+  });
+  header.append(identity, close);
+  const description = document.createElement('p');
+  description.textContent = o.sub;
+  const readings = document.createElement('dl');
+  readings.className = 'object-readings';
+  const values = [['Azimuth', `${o.azDeg.toFixed(1)}°`], ['Elevation', `${o.elDeg.toFixed(1)}°`]];
+  if(o.kind === 'body') values.push(['Distance', `${distanceFormat.format(o.rangeKm)} km`]);
+  for(const [label, value] of values) {
+    const reading = document.createElement('div');
+    const dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = label!;
+    dd.textContent = value!;
+    reading.append(dt, dd);
+    readings.append(reading);
+  }
+  details.replaceChildren(header, description, readings);
 }
 
 // ---------- toolbar & sheets ----------
@@ -381,23 +433,25 @@ const sheets = { calibrate: $('calib-sheet'), eval: $('eval-sheet'), layers: $('
 
 function setMode(m: Mode) {
   mode = m;
-  sheets.calibrate.hidden = m !== 'calibrate';
-  sheets.eval.hidden = m !== 'eval';
-  $('btn-calibrate').classList.toggle('active', m === 'calibrate');
-  $('btn-eval').classList.toggle('active', m === 'eval');
-  if (m !== 'view') {
+  for(const [name, sheet] of Object.entries(sheets)) {
+    sheet.hidden = name !== m;
+    $(`btn-${name}`).setAttribute('aria-expanded', String(name === m));
+  }
+  if(m !== 'view') {
+    skyStatus.open = false;
     details.hidden = true;
-    sheets.layers.hidden = true;
   }
   if (m === 'calibrate') updateCalibStats();
   if (m === 'eval') updateEvalStats();
 }
 
-$('btn-calibrate').addEventListener('click', () => setMode(mode === 'calibrate' ? 'view' : 'calibrate'));
-$('btn-eval').addEventListener('click', () => setMode(mode === 'eval' ? 'view' : 'eval'));
-$('btn-layers').addEventListener('click', () => {
+for(const name of ['layers', 'calibrate', 'eval'] as const) $(`btn-${name}`).addEventListener('click', () => setMode(mode === name ? 'view' : name));
+
+skyStatus.addEventListener('toggle', () => {
+  if(!skyStatus.open) return;
   setMode('view');
-  sheets.layers.hidden = !sheets.layers.hidden;
+  details.hidden = true;
+  updateHud(Date.now());
 });
 const btnShowAll = $('btn-showall');
 btnShowAll.setAttribute('aria-pressed', String(showAll));
@@ -415,10 +469,26 @@ $('btn-night').addEventListener('click', (e) => {
 });
 document.querySelectorAll('.sheet .close').forEach((b) =>
   b.addEventListener('click', () => {
-    sheets.layers.hidden = true;
+    const previous = mode;
     setMode('view');
+    if(previous !== 'view') $(`btn-${previous}`).focus();
   }),
 );
+
+window.addEventListener('keydown', (e) => {
+  if(e.key !== 'Escape') return;
+  if(skyStatus.open) {
+    skyStatus.open = false;
+    skyStatus.querySelector('summary')?.focus();
+  } else if(mode !== 'view') {
+    const previous = mode;
+    setMode('view');
+    $(`btn-${previous}`).focus();
+  } else {
+    details.hidden = true;
+    overlay.selectedId = null;
+  }
+});
 
 $('calib-reset').addEventListener('click', () => {
   calib = resetCalibration();
@@ -434,8 +504,14 @@ $('eval-clear').addEventListener('click', () => {
 
 constellationToggle.addEventListener('change', () => {
   writeFlag(CONSTELLATIONS_KEY, constellationToggle.checked);
+  constellationArtToggle.disabled = !constellationToggle.checked;
   overlay.resetConstellationReveals();
   if(constellationToggle.checked && !showAll && bodies.sunElDeg >= -6) toast('Constellations appear after twilight. Use Show all to preview.');
+});
+
+constellationArtToggle.addEventListener('change', () => {
+  writeFlag(CONSTELLATION_ART_OFF_KEY, !constellationArtToggle.checked);
+  starsAt = -Infinity;
 });
 
 sheets.layers.querySelectorAll<HTMLInputElement>('input[data-group], input[data-layer="aircraft"], input[data-layer="bodies"]').forEach((input) =>

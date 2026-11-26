@@ -1,10 +1,10 @@
 import type { Vec3 } from '@skytrace/shared';
 
 export type SkyKind = 'aircraft' | 'sat' | 'body';
+export type BodySymbol = 'sun' | 'moon' | 'venus' | 'mars' | 'jupiter' | 'saturn';
 
 /** Anything we can label in the sky, already converted to the observer's view. */
-export interface SkyObject {
-  kind: SkyKind;
+interface SkyObjectBase {
   id: string;
   label: string;
   sub: string;
@@ -18,6 +18,12 @@ export interface SkyObject {
   /** Visible to the naked eye right now (sats: sunlit + dark sky; bodies: always). */
   visible: boolean;
 }
+
+export type SkyObject = SkyObjectBase & (
+  { kind: 'aircraft'; nextDir?: Vec3 } |
+  { kind: 'sat'; station: boolean } |
+  { kind: 'body'; symbol: BodySymbol; phase?: { lit: number; sun: Vec3 } }
+);
 
 export type SkyReference = Pick<SkyObject, 'id' | 'label' | 'dir' | 'azDeg' | 'elDeg'> & { kind: SkyKind | 'star' };
 

@@ -84,6 +84,8 @@ A cron trigger refreshes CelesTrak TLEs every 3 hours so phones normally never h
 
 Enable **Layers → Constellations** to see star patterns and names after twilight. **Show all** previews the layer in daylight. In **Calibrate** or **Eval**, pick a named star and tap its actual position in the camera view. For an independent accuracy measurement, use different stars for calibration and evaluation.
 
+With **Illustrations** enabled, aim near a constellation to reveal its artwork behind the star lines. The 85 available drawings are by Johan Meuris and the Stellarium Project. [Originals and licenses](packages/app/public/constellation-art/CREDITS.txt).
+
 The app bundles coordinates and Western line figures from [d3-celestial](https://github.com/ofrohn/d3-celestial/tree/7e720a3de062059d4c5400a379146a601d9010e0/data). The catalog uses `constellations.lines.json` for the paths, `constellations.json` for names, and `stars.6.json` with `starnames.json` for named stars of magnitude 2.5 or brighter. The [BSD 3-Clause license](packages/app/public/d3-celestial-license.txt) ships with the app.
 
 ## Status

@@ -2,8 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#090a12" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -12,68 +12,95 @@
     <title>SkyTrace AR</title>
   </head>
   <body>
+    <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="mark-skytrace" viewBox="0 0 24 24"><path d="M12 2.5v19M2.5 12h19M7 7l10 10m0-10L7 17"/><circle cx="12" cy="12" r="7.5" /></symbol>
+      <symbol id="mark-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    </svg>
     <video id="video" playsinline muted></video>
+    <div id="constellation-art" aria-hidden="true"></div>
     <canvas id="overlay"></canvas>
 
-    <header id="hud">
-      <div id="heading">—</div>
-      <div id="status"></div>
+    <header id="hud" inert>
+      <div class="brand"><span class="brand-mark"><svg aria-hidden="true"><use href="#mark-skytrace"/></svg></span><span>SkyTrace</span></div>
+      <div class="bearing"><span id="heading">—</span><span id="elevation" title="Elevation">—</span></div>
+      <details id="sky-status">
+        <summary title="View camera, location and tracking status">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"/><circle cx="12" cy="12.5" r="3"/><path d="M8 6l1.5-2h5L16 6"/></svg>
+          <span id="view-source">Preview</span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+        </summary>
+        <div id="status"></div>
+      </details>
     </header>
 
-    <div id="toast" hidden></div>
+    <div id="toast" role="status" hidden></div>
+    <section id="details" aria-label="Object details" hidden></section>
 
-    <div id="details" hidden></div>
-
-    <nav id="toolbar">
-      <button id="btn-calibrate" type="button">Calibrate</button>
-      <button id="btn-eval" type="button">Eval</button>
-      <button id="btn-layers" type="button">Layers</button>
-      <button id="btn-showall" type="button" aria-pressed="false" title="Show every object at full strength, even ones daylight or Earth's shadow make invisible">Show all</button>
-      <button id="btn-night" type="button" aria-pressed="false">Night</button>
+    <nav id="toolbar" aria-label="Sky view controls" inert>
+      <button id="btn-layers" type="button" aria-controls="layers" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg><span>Layers</span></button>
+      <button id="btn-calibrate" type="button" aria-controls="calib-sheet" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg><span>Calibrate</span></button>
+      <button id="btn-eval" type="button" aria-controls="eval-sheet" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h16M8 15l4-4 3 2 5-6"/><path d="M17 7h3v3"/></svg><span>Eval</span></button>
+      <button id="btn-showall" type="button" aria-pressed="false" title="Preview objects even in daylight or Earth's shadow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.4-6 10-6 10 6 10 6-3.4 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/></svg><span>Show all</span></button>
+      <button id="btn-night" type="button" aria-pressed="false" title="Switch to red night colors"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.4 8.4 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/><path d="M17 4v5m-2.5-2.5h5"/></svg><span>Night</span></button>
     </nav>
 
-    <div id="layers" class="sheet" hidden>
-      <h3>Layers</h3>
-      <label><input type="checkbox" data-layer="aircraft" checked /> Aircraft (ADS-B)</label>
-      <label><input type="checkbox" data-group="visual" checked /> Bright satellites</label>
-      <label><input type="checkbox" data-group="stations" checked /> Space stations</label>
-      <label><input type="checkbox" data-group="starlink" /> Starlink (thousands)</label>
-      <label><input type="checkbox" data-group="gps-ops" /> GPS</label>
-      <label><input type="checkbox" data-group="satnogs" /> All tracked (~1,700, mostly too faint to see)</label>
-      <label><input type="checkbox" data-layer="bodies" checked /> Sun, Moon, planets</label>
-      <label><input type="checkbox" id="layer-constellations" /> Constellations</label>
-      <button type="button" class="close">Done</button>
-    </div>
+    <section id="layers" class="sheet" aria-labelledby="layers-title" hidden>
+      <header class="sheet-heading">
+        <h2 id="layers-title">Layers</h2>
+        <button type="button" class="icon-button close" aria-label="Close layers"><svg aria-hidden="true"><use href="#mark-close"/></svg></button>
+      </header>
+      <fieldset>
+        <legend>Sky objects</legend>
+        <label class="layer"><span>Constellations</span><input type="checkbox" id="layer-constellations" /></label>
+        <label class="layer art-layer"><span>Illustrations</span><input type="checkbox" id="layer-constellation-art" checked disabled /></label>
+        <label class="layer"><span>Aircraft</span><input type="checkbox" data-layer="aircraft" checked /></label>
+        <label class="layer"><span>Sun, Moon and planets</span><input type="checkbox" data-layer="bodies" checked /></label>
+      </fieldset>
+      <fieldset>
+        <legend>Satellites</legend>
+        <label class="layer"><span>Bright satellites</span><input type="checkbox" data-group="visual" checked /></label>
+        <label class="layer"><span>Space stations</span><input type="checkbox" data-group="stations" checked /></label>
+        <label class="layer"><span>Starlink</span><input type="checkbox" data-group="starlink" /></label>
+        <label class="layer"><span>GPS</span><input type="checkbox" data-group="gps-ops" /></label>
+        <label class="layer"><span>All tracked <small>SatNOGS</small></span><input type="checkbox" data-group="satnogs" /></label>
+      </fieldset>
+      <a class="art-credits" href="/constellation-art/CREDITS.txt" target="_blank" rel="noopener">Artwork credits</a>
+    </section>
 
-    <div id="eval-sheet" class="sheet" hidden>
-      <h3>Accuracy eval</h3>
-      <p>Tap where the chosen star or a nearby labelled object really is in the camera image to measure the angular error.</p>
-      <label for="eval-reference">Reference <select id="eval-reference"><option value="">Nearest labelled object</option></select></label>
-      <p id="eval-stats"></p>
+    <section id="eval-sheet" class="sheet" aria-labelledby="eval-title" hidden>
+      <header class="sheet-heading">
+        <h2 id="eval-title">Accuracy eval</h2>
+        <button type="button" class="icon-button close" aria-label="Close accuracy evaluation"><svg aria-hidden="true"><use href="#mark-close"/></svg></button>
+      </header>
+      <p>Choose a reference, then tap its actual position in the camera view to measure the error.</p>
+      <label class="reference" for="eval-reference">Reference <select id="eval-reference"><option value="">Nearest labelled object</option></select></label>
+      <p class="metrics" id="eval-stats"></p>
       <div class="row">
-        <button type="button" id="eval-download">Download CSV</button>
+        <button type="button" class="primary" id="eval-download">Download CSV</button>
         <button type="button" id="eval-clear">Clear</button>
-        <button type="button" class="close">Stop</button>
       </div>
-    </div>
+    </section>
 
-    <div id="calib-sheet" class="sheet" hidden>
-      <h3>Calibrate</h3>
-      <p>Choose a star by name or use a nearby labelled object, then tap its real position in the camera image. Never look directly at the Sun. Two taps on objects far apart can also adjust the lens field of view.</p>
-      <label for="calib-reference">Reference <select id="calib-reference"><option value="">Nearest labelled object</option></select></label>
-      <p id="calib-stats"></p>
-      <div class="row">
-        <button type="button" id="calib-reset">Reset</button>
-        <button type="button" class="close">Done</button>
+    <section id="calib-sheet" class="sheet" aria-labelledby="calib-title" hidden>
+      <header class="sheet-heading">
+        <h2 id="calib-title">Calibrate</h2>
+        <button type="button" class="icon-button close" aria-label="Close calibration"><svg aria-hidden="true"><use href="#mark-close"/></svg></button>
+      </header>
+      <p>Choose a reference, then tap its actual position in the camera view. Two distant targets help adjust the field of view. Never look directly at the Sun.</p>
+      <label class="reference" for="calib-reference">Reference <select id="calib-reference"><option value="">Nearest labelled object</option></select></label>
+      <p class="metrics" id="calib-stats"></p>
+      <div class="row"><button type="button" id="calib-reset">Reset calibration</button></div>
+    </section>
+
+    <section id="start" aria-labelledby="start-title">
+      <div class="start-content">
+        <span class="brand-mark"><svg aria-hidden="true"><use href="#mark-skytrace"/></svg></span>
+        <h1 id="start-title">SkyTrace AR</h1>
+        <p>Point at the sky to find aircraft, satellites, and constellations.</p>
+        <button id="btn-start" class="primary" type="button">Open sky view <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+        <p class="small">Allow camera, location, and motion access when asked. The camera feed stays on this device.</p>
+        <p class="small" id="start-hint"></p>
       </div>
-    </div>
-
-    <section id="start">
-      <h1>SkyTrace AR</h1>
-      <p>Point your phone at the sky and see every plane and satellite labelled.</p>
-      <button id="btn-start" type="button">Start</button>
-      <p class="small">Needs camera, location and motion access. Nothing is stored on a server.</p>
-      <p class="small" id="start-hint"></p>
     </section>
 
     <script type="module" src="/src/main.ts"></script>

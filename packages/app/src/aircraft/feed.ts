@@ -88,6 +88,11 @@ export class AircraftFeed {
         label: a.cs || a.id.toUpperCase(),
         sub: `FL${String(fl).padStart(3, '0')} · ${km.toFixed(km < 10 ? 1 : 0)} km · ${Math.round(a.spdMs * 3.6)} km/h${a.type ? ' · ' + a.type : ''}`,
         dir: azElToEnu(la.azDeg, el),
+        get nextDir() {
+          const ahead = deadReckon(p, a.spdMs, a.trkDeg, a.vrMs, 2);
+          const next = enuToAzEl(ecefToEnu(f, geodeticToEcef(ahead)));
+          return azElToEnu(next.azDeg, next.elDeg + refractionDeg(next.elDeg) * 0.5);
+        },
         azDeg: la.azDeg,
         elDeg: el,
         rangeKm: km,
