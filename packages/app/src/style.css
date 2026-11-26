@@ -40,11 +40,8 @@ svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColo
 #video, #overlay { position: fixed; inset: 0; width: 100%; height: 100%; }
 #video { object-fit: cover; background: radial-gradient(ellipse at 48% 104%, var(--sky-glow), var(--sky) 76%); }
 body.night #video { filter: brightness(.55) sepia(1) hue-rotate(-50deg) saturate(3); }
-.constellation-art { position: fixed; inset: 0 auto auto 0; pointer-events: none; background: var(--constellation-art); opacity: 0; transform-origin: 0 0; mask-image: var(--art-image); mask-size: 100% 100%; mask-repeat: no-repeat; mask-mode: luminance; }
-@supports not (mask-mode: luminance) {
-  .constellation-art { background: var(--art-image) center / 100% 100% no-repeat; mix-blend-mode: screen; mask-image: none; }
-  body.night .constellation-art { filter: sepia(1) hue-rotate(320deg) saturate(5); }
-}
+.constellation-art { position: fixed; inset: 0 auto auto 0; pointer-events: none; background: var(--constellation-art); opacity: 0; transform-origin: 0 0; -webkit-mask: var(--art-image) 0 0 / 100% 100% no-repeat; mask: var(--art-image) 0 0 / 100% 100% no-repeat; }
+/* art PNGs carry the drawing in their alpha channel: mobile Safari/Chrome ignore mask-mode: luminance on 3D-transformed layers */
 #overlay { touch-action: none; user-select: none; -webkit-user-select: none; }
 
 #hud {
