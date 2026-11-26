@@ -84,6 +84,7 @@ export class AircraftFeed {
       const fl = Math.round(a.altM / 0.3048 / 100);
       out.push({
         kind: 'aircraft',
+        motionRevision: a.t,
         id: `ac-${a.id}`,
         label: a.cs || a.id.toUpperCase(),
         sub: `FL${String(fl).padStart(3, '0')} · ${km.toFixed(km < 10 ? 1 : 0)} km · ${Math.round(a.spdMs * 3.6)} km/h${a.type ? ' · ' + a.type : ''}`,

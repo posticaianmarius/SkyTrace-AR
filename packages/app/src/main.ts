@@ -5,16 +5,19 @@ import { addTap, loadCalibration, resetCalibration, type CalState } from './cali
 import { CameraModel, DEFAULT_LONG_FOV_DEG } from './camera/projection';
 import { startCamera } from './camera/video';
 import { EvalLog } from './eval/logger';
-import { computeBodies, type BodiesResult } from './sats/bodies';
+import { easeOut, progress } from './math/motion';
+import { BodyEphemeris } from './sats/bodies';
 import { Satellites } from './sats/satellites';
 import { Location } from './sensors/location';
 import { declinationDeg } from './sensors/declination';
 import { Orientation, screenAngle } from './sensors/orientation';
 import { computeStarSky, type StarSky } from './stars/constellations';
 import type { SkyObject, SkyReference } from './types';
+import { hasBodyModel } from './ui/body-model-renderer';
 import { ConstellationArt } from './ui/constellation-art';
 import { objectCategory } from './ui/markers';
 import { Overlay, type Placed } from './ui/overlay';
+import { BODY_FOCUS_ZOOM, CLOSEUP_START_ZOOM } from './ui/sky-body-closeup';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -28,6 +31,8 @@ const toastEl = $('toast');
 const details = $('details');
 const constellationToggle = $<HTMLInputElement>('layer-constellations');
 const constellationArtToggle = $<HTMLInputElement>('layer-constellation-art');
+const zoomIn = $<HTMLButtonElement>('zoom-in'), zoomOut = $<HTMLButtonElement>('zoom-out'), zoomReset = $<HTMLButtonElement>('zoom-reset');
+const closeupCaption = $('closeup-caption');
 const referencePickers = { calibrate: $<HTMLSelectElement>('calib-reference'), eval: $<HTMLSelectElement>('eval-reference') };
 
 type Mode = 'view' | 'calibrate' | 'eval' | 'layers';
@@ -36,7 +41,7 @@ const orientation = new Orientation();
 const loc = new Location();
 const cam = new CameraModel();
 const overlay = new Overlay(canvas);
-const constellationArt = new ConstellationArt($('constellation-art'));
+const constellationArt = new ConstellationArt($('constellation-art'), $('constellation-art-outgoing'));
 const sats = new Satellites();
 const aircraft = new AircraftFeed();
 const evalLog = new EvalLog();
@@ -80,9 +85,14 @@ function writeFlag(key: string, on: boolean) {
     /* storage unavailable: setting lasts for this visit only */
   }
 }
-let longFovDeg = DEFAULT_LONG_FOV_DEG;
-let bodies: BodiesResult = { objects: [], sunElDeg: 0 };
-let bodiesAt = 0;
+const MAX_ZOOM = 32;
+let zoom = 1;
+let zoomTarget = 1;
+let focusId: string | null = null;
+let closeupId: string | null = null;
+let zoomChange: { from: number; start: number; duration: number } | null = null;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const ephemeris = new BodyEphemeris();
 let stars: StarSky | null = null;
 let starsAt = -Infinity;
 let objects: SkyObject[] = [];
@@ -107,13 +117,15 @@ $('btn-start').addEventListener('click', async (event) => {
   $('start').hidden = true;
   $('hud').inert = false;
   $('toolbar').inert = false;
+  $('zoom-controls').inert = false;
   if(event.detail === 0) $('btn-layers').focus();
 
   loc.onChange((p) => {
     sats.setObserver(p);
     aircraft.setObserver(p);
     orientation.setDeclination(declinationDeg(p.lat, p.lon));
-    bodiesAt = 0;
+    ephemeris.reset();
+    overlay.resetTrackMotion();
     starsAt = -Infinity;
   });
   sats.reload();
@@ -129,15 +141,73 @@ $('btn-start').addEventListener('click', async (event) => {
   }
 });
 
-orientation.attachSimControls(canvas, () => cam.hfovDeg);
-window.addEventListener(
-  'wheel',
-  (e) => {
-    if (orientation.mode !== 'simulated') return;
-    longFovDeg = Math.max(15, Math.min(120, longFovDeg * (e.deltaY > 0 ? 1.08 : 1 / 1.08)));
-  },
-  { passive: true },
-);
+orientation.attachSimControls(canvas, () => 180 / (Math.PI * cam.F));
+
+function applyZoom(value: number) {
+  if(value === 1) focusId = null;
+  if(zoom === value) return;
+  zoom = value;
+  const display = `${Number(zoom.toFixed(1))}×`;
+  if(zoomReset.textContent !== display) {
+    zoomReset.textContent = display;
+    zoomReset.setAttribute('aria-label', `Reset zoom, currently ${display}`);
+  }
+}
+
+function setZoom(magnification: number, duration = 0) {
+  const next = Math.max(1, Math.min(MAX_ZOOM, magnification));
+  if(duration && !reducedMotion.matches && next === zoomTarget && zoomChange) return;
+  zoomTarget = next;
+  zoomOut.disabled = next === 1;
+  zoomIn.disabled = next === MAX_ZOOM;
+  if(next > 1) orientation.simTouched = true;
+  zoomChange = duration && !reducedMotion.matches && next !== zoom ? { from: zoom, start: performance.now(), duration } : null;
+  if(!zoomChange) applyZoom(next);
+}
+
+function advanceZoom(now: number) {
+  if(!zoomChange) return;
+  const { from, start, duration } = zoomChange;
+  const t = reducedMotion.matches ? 1 : progress(now, start, duration);
+  if(t === 0) return;
+  applyZoom(t === 1 ? zoomTarget : from * (zoomTarget / from) ** easeOut(t));
+  if(t === 1) zoomChange = null;
+}
+
+function zoomToBody(o: SkyObject) {
+  if(orientation.mode === 'simulated' && !video.videoWidth) orientation.lookAt(o.azDeg - calib.yawDeg, o.elDeg);
+  focusId = o.id;
+  setZoom(BODY_FOCUS_ZOOM, 460);
+}
+
+zoomIn.addEventListener('click', () => setZoom(zoomTarget * Math.SQRT2, 205));
+zoomOut.addEventListener('click', () => setZoom(zoomTarget / Math.SQRT2, 205));
+zoomReset.addEventListener('click', () => setZoom(1, 250));
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 80 : 1);
+  setZoom(zoomTarget * Math.exp(-Math.max(-150, Math.min(150, delta)) * .003), 145);
+}, { passive: false });
+
+let pinch: { span: number; zoom: number } | null = null;
+function fingerSpan(touches: TouchList): number {
+  const a = touches[0]!, b = touches[1]!;
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
+canvas.addEventListener('touchstart', (e) => {
+  if(e.touches.length === 2) {
+    setZoom(zoom);
+    pinch = { span: Math.max(1, fingerSpan(e.touches)), zoom };
+  }
+}, { passive: true });
+canvas.addEventListener('touchmove', (e) => {
+  if(!pinch || e.touches.length !== 2) return;
+  e.preventDefault();
+  setZoom(pinch.zoom * fingerSpan(e.touches) / pinch.span);
+}, { passive: false });
+canvas.addEventListener('touchend', () => { pinch = null; }, { passive: true });
+canvas.addEventListener('touchcancel', () => { pinch = null; }, { passive: true });
 
 // ---------- frame loop ----------
 
@@ -147,10 +217,15 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-function frame() {
+function frame(t: number) {
+  advanceZoom(t);
   const now = Date.now();
-  cam.update({
-    deviceToWorld: orientation.rotation(),
+  const bodies = ephemeris.sample(loc.current, now);
+  sats.sunElDeg = bodies.sunElDeg;
+
+  const visibleBodies = showBodies ? bodies.objects.filter((o) => o.elDeg > -1) : [];
+  const optics = {
+    deviceToWorld: orientation.rotation(t, zoom, reducedMotion.matches),
     screenAngleDeg: screenAngle(),
     yawOffsetDeg: calib.yawDeg,
     fovScale: orientation.mode === 'simulated' ? 1 : calib.fovScale,
@@ -158,16 +233,21 @@ function frame() {
     screenH: window.innerHeight,
     videoW: video.videoWidth,
     videoH: video.videoHeight,
-    longFovDeg,
-  });
-
-  if(now - bodiesAt >= 1000 || now < bodiesAt) {
-    bodies = computeBodies(loc.current, new Date(now));
-    sats.sunElDeg = bodies.sunElDeg;
-    bodiesAt = now;
+    longFovDeg: DEFAULT_LONG_FOV_DEG,
+    zoom,
+  };
+  cam.update(optics);
+  if(focusId) {
+    const target = visibleBodies.find((o) => o.id === focusId);
+    if(!target || !cam.focusOn(target.dir)) {
+      setZoom(1);
+      cam.update({ ...optics, zoom });
+      toast('Target left the camera view. Aim at it and zoom again.');
+    }
   }
+  const crop = zoom === 1 ? '' : `translate(${cam.centerX - cam.W / 2}px, ${cam.centerY - cam.H / 2}px) scale(${zoom})`;
+  if(video.style.transform !== crop) video.style.transform = crop;
 
-  const visibleBodies = showBodies ? bodies.objects.filter((o) => o.elDeg > -1) : [];
   objects = [...visibleBodies, ...sats.objects(now), ...aircraft.objects(now)];
   // Counted before "Show all" so the status line keeps reporting what the eye can see.
   satsVisibleByEye = objects.filter((o) => o.kind === 'sat' && o.visible).length;
@@ -182,11 +262,20 @@ function frame() {
     updateReferencePickers([]);
   }
   autoAim();
-  constellationArt.draw(cam, mode === 'calibrate' || mode === 'eval' ? undefined : stars?.art);
-  placed = overlay.draw(cam, objects, stars, mode === 'calibrate' || mode === 'eval' ? selectedStar(mode) : undefined);
+  const measuring = mode === 'calibrate' || mode === 'eval' ? mode : null;
+  constellationArt.draw(cam, measuring || zoom >= CLOSEUP_START_ZOOM ? undefined : stars?.art, t);
+  placed = overlay.draw(cam, objects, stars, measuring ? selectedStar(measuring) : undefined, !measuring, t);
+  const closeup = overlay.closeup;
+  if((closeup?.id ?? null) !== closeupId) {
+    closeupId = closeup?.id ?? null;
+    closeupCaption.hidden = !closeup;
+    if(closeup) {
+      $('closeup-name').textContent = closeup.label;
+      $('closeup-note').textContent = closeup.symbol === 'sun' ? 'Rendered close-up · Avoid direct viewing' : 'Rendered close-up';
+    }
+  }
 
   frames++;
-  const t = performance.now();
   if (t - fpsAt > 1000) {
     fps = (frames * 1000) / (t - fpsAt);
     frames = 0;
@@ -284,7 +373,8 @@ function compass(az: number) {
 // ---------- taps ----------
 
 let down: { x: number; y: number } | null = null;
-canvas.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
+canvas.addEventListener('pointerdown', (e) => { down = e.pointerType === 'touch' && !e.isPrimary ? null : { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('pointercancel', () => { down = null; });
 canvas.addEventListener('pointerup', (e) => {
   if (!down) return;
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
@@ -373,7 +463,7 @@ function onTap(x: number, y: number) {
   let bestD = 44;
   for (const p of placed) {
     const d = Math.hypot(p.x - x, p.y - y);
-    if (d < bestD) {
+    if(d < (p.radius ?? 0) || d < bestD) {
       best = p;
       bestD = d;
     }
@@ -425,6 +515,17 @@ function showDetails(o: SkyObject | null) {
     readings.append(reading);
   }
   details.replaceChildren(header, description, readings);
+  if(o.kind === 'body' && hasBodyModel(o.symbol) && (focusId !== o.id || zoom < BODY_FOCUS_ZOOM)) {
+    const focus = document.createElement('button');
+    focus.type = 'button';
+    focus.className = 'primary focus-body';
+    focus.textContent = `Zoom to ${o.label}`;
+    focus.addEventListener('click', () => {
+      zoomToBody(o);
+      showDetails(null);
+    });
+    details.append(focus);
+  }
 }
 
 // ---------- toolbar & sheets ----------
@@ -438,6 +539,7 @@ function setMode(m: Mode) {
     $(`btn-${name}`).setAttribute('aria-expanded', String(name === m));
   }
   if(m !== 'view') {
+    if(focusId) setZoom(1);
     skyStatus.open = false;
     details.hidden = true;
   }
@@ -485,6 +587,7 @@ window.addEventListener('keydown', (e) => {
     setMode('view');
     $(`btn-${previous}`).focus();
   } else {
+    if(zoom > 1 || zoomTarget > 1 || focusId) setZoom(1, 200);
     details.hidden = true;
     overlay.selectedId = null;
   }
@@ -506,7 +609,7 @@ constellationToggle.addEventListener('change', () => {
   writeFlag(CONSTELLATIONS_KEY, constellationToggle.checked);
   constellationArtToggle.disabled = !constellationToggle.checked;
   overlay.resetConstellationReveals();
-  if(constellationToggle.checked && !showAll && bodies.sunElDeg >= -6) toast('Constellations appear after twilight. Use Show all to preview.');
+  if(constellationToggle.checked && !showAll && sats.sunElDeg >= -6) toast('Constellations appear after twilight. Use Show all to preview.');
 });
 
 constellationArtToggle.addEventListener('change', () => {

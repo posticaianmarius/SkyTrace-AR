@@ -20,7 +20,8 @@
  * simulated (desktop: drag to look around).
  */
 import { deltaDeg, normalizeDeg } from '@skytrace/shared';
-import { deviceToWorld, matFromQuat, nlerp, quatFromMat, type Mat3, type Quat } from '../math/mat3';
+import { deviceToWorld, matFromQuat, nlerp, quatAngleDeg, quatFromMat, type Mat3, type Quat } from '../math/mat3';
+import { motionAlpha } from '../math/motion';
 import { CompassFusion, StillnessDetector, cameraElevation, type CompassState } from './compassFusion';
 
 export type OrientationMode = 'fused' | 'absolute' | 'relative' | 'simulated';
@@ -78,6 +79,9 @@ export class Orientation {
   simEl = 10;
   /** True once the user has dragged or used the keys (stops auto-aiming). */
   simTouched = false;
+  private lastRotationAt: number | null = null;
+  private glideAz = 0;
+  private glideEl = 0;
 
   /** Must be called from a user gesture (iOS permission). */
   async start(): Promise<OrientationMode> {
@@ -222,37 +226,57 @@ export class Orientation {
   }
 
   /** Desktop: drag to look around. */
-  attachSimControls(el: HTMLElement, getFovDeg: () => number) {
-    let dragging: { x: number; y: number } | null = null;
+  attachSimControls(el: HTMLElement, degreesPerPixel: () => number) {
+    let dragging: { id: number; x: number; y: number; at: number; azV: number; elV: number } | null = null;
     el.addEventListener('pointerdown', (e) => {
-      if (this.mode !== 'simulated') return;
-      dragging = { x: e.clientX, y: e.clientY };
+      if(this.mode !== 'simulated' || e.button !== 0) return;
+      this.glideAz = this.glideEl = 0;
+      if(e.pointerType === 'touch' && !e.isPrimary) {
+        dragging = null;
+        return;
+      }
+      dragging = { id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp, azV: 0, elV: 0 };
     });
-    window.addEventListener('pointerup', () => (dragging = null));
+    window.addEventListener('pointerup', (e) => {
+      if(!dragging || e.pointerId !== dragging.id) return;
+      if(e.timeStamp - dragging.at < 75) {
+        this.glideAz = Math.max(-.14, Math.min(.14, dragging.azV));
+        this.glideEl = Math.max(-.1, Math.min(.1, dragging.elV));
+      }
+      dragging = null;
+    });
+    window.addEventListener('pointercancel', (e) => { if(e.pointerId === dragging?.id) dragging = null; });
     window.addEventListener('pointermove', (e) => {
-      if (!dragging || this.mode !== 'simulated') return;
-      const degPerPx = getFovDeg() / Math.max(window.innerWidth, window.innerHeight);
-      this.simAz = normalizeDeg(this.simAz - (e.clientX - dragging.x) * degPerPx);
-      this.simEl = Math.max(-30, Math.min(90, this.simEl + (e.clientY - dragging.y) * degPerPx));
-      dragging = { x: e.clientX, y: e.clientY };
+      if(!dragging || e.pointerId !== dragging.id || this.mode !== 'simulated') return;
+      const degPerPx = degreesPerPixel(), dt = Math.max(8, e.timeStamp - dragging.at);
+      const az = (dragging.x - e.clientX) * degPerPx, el = (e.clientY - dragging.y) * degPerPx;
+      dragging = { id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp, azV: .45 * dragging.azV + .55 * az / dt, elV: .45 * dragging.elV + .55 * el / dt };
+      if(az === 0 && el === 0) return;
       this.simTouched = true;
-      this.updateSim();
+      this.aim(this.simAz + az, this.simEl + el);
     });
     window.addEventListener('keydown', (e) => {
       if (this.mode !== 'simulated') return;
       if(e.target instanceof HTMLElement && e.target.closest('button, input, select, summary')) return;
-      const step = e.shiftKey ? 10 : 2;
+      const step = (e.shiftKey ? 135 : 27) * degreesPerPixel();
       if (e.key === 'ArrowLeft') this.simAz = normalizeDeg(this.simAz - step);
       else if (e.key === 'ArrowRight') this.simAz = normalizeDeg(this.simAz + step);
       else if (e.key === 'ArrowUp') this.simEl = Math.min(90, this.simEl + step);
       else if (e.key === 'ArrowDown') this.simEl = Math.max(-30, this.simEl - step);
       else return;
+      e.preventDefault();
+      this.glideAz = this.glideEl = 0;
       this.simTouched = true;
       this.updateSim();
     });
   }
 
   lookAt(azDeg: number, elDeg: number) {
+    this.glideAz = this.glideEl = 0;
+    this.aim(azDeg, elDeg);
+  }
+
+  private aim(azDeg: number, elDeg: number) {
     this.simAz = normalizeDeg(azDeg);
     this.simEl = Math.max(-30, Math.min(90, elDeg));
     this.updateSim();
@@ -265,9 +289,24 @@ export class Orientation {
   }
 
   /** Call once per frame. Returns the smoothed device -> world rotation. */
-  rotation(): Mat3 {
-    // The gyro stream is already smooth, so follow it closely; absolute-only streams are noisier.
-    if (this.mode !== 'simulated') this.q = nlerp(this.q, this.target, this.mode === 'absolute' ? 0.25 : 0.5);
+  rotation(now: number, zoom: number, reducedMotion: boolean): Mat3 {
+    const dt = this.lastRotationAt === null ? 1000 / 60 : now - this.lastRotationAt;
+    this.lastRotationAt = now;
+    if(this.mode !== 'simulated') {
+      // Follow turns promptly and filter small sensor changes more strongly at high magnification.
+      const absolute = this.mode === 'absolute', angle = quatAngleDeg(this.q, this.target);
+      const steady = (absolute ? 54 : 23) + Math.min(32, Math.log2(zoom) * 7);
+      const fast = absolute ? 18 : 9;
+      const tau = steady + (fast - steady) * Math.min(1, angle / 7);
+      this.q = nlerp(this.q, this.target, motionAlpha(dt, tau));
+    } else if(reducedMotion || dt > 120 || Math.hypot(this.glideAz, this.glideEl) < .001) {
+      this.glideAz = this.glideEl = 0;
+    } else {
+      const decay = motionAlpha(dt, 95);
+      this.aim(this.simAz + this.glideAz * 95 * decay, this.simEl + this.glideEl * 95 * decay);
+      this.glideAz *= 1 - decay;
+      this.glideEl *= 1 - decay;
+    }
     return matFromQuat(this.q);
   }
 

@@ -51,8 +51,8 @@ export function projectArtPlane(cam: CameraModel, plane: ArtPlane) {
   const above = clipPolygon(quad, (u, v) => plane.origin[2] + u * plane.right[2] + v * plane.down[2]);
   const visible = clipPolygon(above, (u, v) => -origin[2] - u * right[2] - v * down[2] - 0.01);
   if(visible.length < 3) return null;
-  const x = ([x, , z]: Vec3) => cam.F * x - cam.W / 2 * z;
-  const y = ([, y, z]: Vec3) => -cam.F * y - cam.H / 2 * z;
+  const x = ([x, , z]: Vec3) => cam.F * x - cam.centerX * z;
+  const y = ([, y, z]: Vec3) => -cam.F * y - cam.centerY * z;
   const matrix = [x(right), y(right), 0, -right[2], x(down), y(down), 0, -down[2], 0, 0, 1, 0, x(origin), y(origin), 0, -origin[2]];
   const clipPath = visible.every((p, i) => p === quad[i]) ? 'none' : `polygon(${visible.map(([u, v]) => `${u}px ${v}px`).join(', ')})`;
   return { matrix, clipPath };

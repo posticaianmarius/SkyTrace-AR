@@ -20,8 +20,8 @@ interface SkyObjectBase {
 }
 
 export type SkyObject = SkyObjectBase & (
-  { kind: 'aircraft'; nextDir?: Vec3 } |
-  { kind: 'sat'; station: boolean } |
+  { kind: 'aircraft'; nextDir?: Vec3; motionRevision?: number } |
+  { kind: 'sat'; station: boolean; nextDir?: Vec3; motionRevision?: number } |
   { kind: 'body'; symbol: BodySymbol; phase?: { lit: number; sun: Vec3 } }
 );
 

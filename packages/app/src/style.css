@@ -40,10 +40,10 @@ svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColo
 #video, #overlay { position: fixed; inset: 0; width: 100%; height: 100%; }
 #video { object-fit: cover; background: radial-gradient(ellipse at 48% 104%, var(--sky-glow), var(--sky) 76%); }
 body.night #video { filter: brightness(.55) sepia(1) hue-rotate(-50deg) saturate(3); }
-#constellation-art { position: fixed; inset: 0 auto auto 0; pointer-events: none; background: var(--constellation-art); opacity: 0; transform-origin: 0 0; mask-image: var(--art-image); mask-size: 100% 100%; mask-repeat: no-repeat; mask-mode: luminance; }
+.constellation-art { position: fixed; inset: 0 auto auto 0; pointer-events: none; background: var(--constellation-art); opacity: 0; transform-origin: 0 0; mask-image: var(--art-image); mask-size: 100% 100%; mask-repeat: no-repeat; mask-mode: luminance; }
 @supports not (mask-mode: luminance) {
-  #constellation-art { background: var(--art-image) center / 100% 100% no-repeat; mix-blend-mode: screen; mask-image: none; }
-  body.night #constellation-art { filter: sepia(1) hue-rotate(320deg) saturate(5); }
+  .constellation-art { background: var(--art-image) center / 100% 100% no-repeat; mix-blend-mode: screen; mask-image: none; }
+  body.night .constellation-art { filter: sepia(1) hue-rotate(320deg) saturate(5); }
 }
 #overlay { touch-action: none; user-select: none; -webkit-user-select: none; }
 
@@ -100,7 +100,7 @@ body.night #video { filter: brightness(.55) sepia(1) hue-rotate(-50deg) saturate
   white-space: pre-line;
 }
 
-#toolbar, .sheet, #details, #status, #toast {
+#toolbar, #zoom-controls, #closeup-caption, .sheet, #details, #status, #toast {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -108,6 +108,15 @@ body.night #video { filter: brightness(.55) sepia(1) hue-rotate(-50deg) saturate
   -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 12px 35px rgba(0, 0, 0, .24);
 }
+
+#zoom-controls { z-index: 2; position: fixed; right: max(var(--edge), env(safe-area-inset-right)); bottom: calc(env(safe-area-inset-bottom) + var(--dock-gap)); display: flex; gap: 1px; padding: 3px; border-radius: 12px; }
+#zoom-controls button { min-width: 44px; padding: 3px 7px; background: transparent; }
+#zoom-controls button:disabled { color: var(--muted); opacity: .48; cursor: default; }
+#zoom-controls button:not(:disabled):hover { background: var(--hover); }
+#zoom-in, #zoom-out { font-size: 18px; }
+#zoom-reset { color: var(--accent); font-size: 12px; font-variant-numeric: tabular-nums; }
+#closeup-caption { z-index: 2; position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 70px); transform: translateX(-50%); display: flex; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 2 * var(--edge)); padding: 7px 10px; border-radius: 10px; pointer-events: none; }
+#closeup-note { color: var(--muted); font-size: 11px; }
 
 #toolbar {
   z-index: 3;
@@ -135,11 +144,12 @@ button {
   background: var(--control);
   font-weight: 650;
   cursor: pointer;
-  transition: background-color 150ms, color 150ms;
+  transition: background-color 150ms, color 150ms, scale 150ms ease-out;
 }
 
 button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:active { background: var(--hover); }
+button:active:not(:disabled) { scale: .97; }
 button.primary { background: var(--accent); color: var(--accent-ink); }
 button.primary:active { opacity: .9; }
 #toolbar button { background: transparent; color: var(--muted); font-size: 13px; white-space: nowrap; }
@@ -210,6 +220,7 @@ body.night #details { --object-accent: var(--accent); }
 .object-readings div { min-width: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; }
 .object-readings dt { color: var(--muted); font-size: 11px; }
 .object-readings dd { margin: 1px 0 0; font-weight: 650; font-variant-numeric: tabular-nums; }
+.focus-body { width: 100%; margin-top: 12px; }
 
 #toast {
   z-index: 4;
@@ -256,6 +267,7 @@ body.night #details { --object-accent: var(--accent); }
 @media (max-width: 600px) {
   :root { --edge: 10px; --dock-offset: 10px; --dock-gap: 82px; }
   #hud { top: calc(env(safe-area-inset-top) + 10px); gap: 6px; }
+  #closeup-caption { top: calc(env(safe-area-inset-top) + 62px); }
   .brand, .bearing, #sky-status summary { gap: 6px; padding: 6px 7px; }
   .brand { font-size: 12px; }
   .brand-mark { width: 24px; height: 24px; }
@@ -271,8 +283,17 @@ body.night #details { --object-accent: var(--accent); }
   #toast { top: calc(env(safe-area-inset-top) + 62px); }
 }
 
+@keyframes surface-enter {
+  from { opacity: 0; translate: 0 var(--entry-offset, 5px); }
+}
+
+.sheet:not([hidden]), #details:not([hidden]), #sky-status[open] #status { animation: surface-enter 185ms ease-out both; }
+#toast:not([hidden]), #closeup-caption:not([hidden]) { --entry-offset: -4px; animation: surface-enter 155ms ease-out both; }
+
 @media (prefers-reduced-motion: reduce) {
   button, .layer input::before { transition: none; }
+  button:active:not(:disabled) { scale: 1; }
+  .sheet:not([hidden]), #details:not([hidden]), #sky-status[open] #status, #toast:not([hidden]), #closeup-caption:not([hidden]) { animation: none; }
 }
 
 [hidden] { display: none !important; }

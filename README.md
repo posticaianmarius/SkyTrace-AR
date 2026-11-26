@@ -86,6 +86,8 @@ Enable **Layers → Constellations** to see star patterns and names after twilig
 
 With **Illustrations** enabled, aim near a constellation to reveal its artwork behind the star lines. The 85 available drawings are by Johan Meuris and the Stellarium Project. [Originals and licenses](packages/app/public/constellation-art/CREDITS.txt).
 
+Zoom toward the Moon, Saturn, or the Sun to see a close-up in the sky view. Scroll, pinch, use the zoom buttons, or tap an object and choose **Zoom to**. The Moon uses the current illumination and [NASA lunar color and elevation maps](packages/app/public/body-models/CREDITS.txt). Saturn has detailed ring shadows and the Sun has a simulated granular surface. The close-ups are rendered models, with Saturn's globe enlarged so its rings can be seen.
+
 The app bundles coordinates and Western line figures from [d3-celestial](https://github.com/ofrohn/d3-celestial/tree/7e720a3de062059d4c5400a379146a601d9010e0/data). The catalog uses `constellations.lines.json` for the paths, `constellations.json` for names, and `stars.6.json` with `starnames.json` for named stars of magnitude 2.5 or brighter. The [BSD 3-Clause license](packages/app/public/d3-celestial-license.txt) ships with the app.
 
 ## Status

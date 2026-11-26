@@ -1,0 +1,6 @@
+Moon surface texture from NASA Goddard's Scientific Visualization Studio, CGI Moon Kit (2019).
+Visualization by Ernie Wright. Lunar Reconnaissance Orbiter Camera and LOLA data.
+Source: https://svs.gsfc.nasa.gov/4720/
+Original file: https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg
+Lunar elevation from the Lunar Orbiter Laser Altimeter (LOLA): https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_3_8bit.jpg
+Usage guidelines: https://www.nasa.gov/nasa-brand-center/images-and-media/

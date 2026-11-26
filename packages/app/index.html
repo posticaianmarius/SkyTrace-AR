@@ -17,7 +17,8 @@
       <symbol id="mark-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
     </svg>
     <video id="video" playsinline muted></video>
-    <div id="constellation-art" aria-hidden="true"></div>
+    <div id="constellation-art-outgoing" class="constellation-art" aria-hidden="true"></div>
+    <div id="constellation-art" class="constellation-art" aria-hidden="true"></div>
     <canvas id="overlay"></canvas>
 
     <header id="hud" inert>
@@ -32,6 +33,14 @@
         <div id="status"></div>
       </details>
     </header>
+
+    <div id="closeup-caption" hidden><strong id="closeup-name"></strong><span id="closeup-note"></span></div>
+
+    <div id="zoom-controls" role="group" aria-label="Camera zoom" inert>
+      <button type="button" id="zoom-out" aria-label="Zoom out" disabled>−</button>
+      <button type="button" id="zoom-reset" title="Reset zoom" aria-label="Reset zoom, currently 1×">1×</button>
+      <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+    </div>
 
     <div id="toast" role="status" hidden></div>
     <section id="details" aria-label="Object details" hidden></section>

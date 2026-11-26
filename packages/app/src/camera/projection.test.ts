@@ -3,7 +3,7 @@ import { angleBetweenDeg, azElToEnu } from '@skytrace/shared';
 import { deviceToWorld } from '../math/mat3';
 import { CameraModel } from './projection';
 
-function camera(az: number, el: number, yawOffsetDeg = 0) {
+function camera(az: number, el: number, yawOffsetDeg = 0, zoom = 1) {
   const cam = new CameraModel();
   cam.update({
     deviceToWorld: deviceToWorld(-az, 90 + el, 0),
@@ -15,6 +15,7 @@ function camera(az: number, el: number, yawOffsetDeg = 0) {
     videoW: 1080,
     videoH: 1920,
     longFovDeg: 66,
+    zoom,
   });
   return cam;
 }
@@ -52,6 +53,27 @@ describe('CameraModel', () => {
     const cam = camera(100, 10, 10);
     const p = cam.project(azElToEnu(110, 10));
     expect(p.x).toBeCloseTo(200, 6);
+  });
+
+  it('magnifies sky coordinates around the same center as a digital video crop', () => {
+    const wide = camera(0, 15), zoomed = camera(0, 15, 0, 4);
+    const v = azElToEnu(4, 18);
+    const a = wide.project(v), b = zoomed.project(v);
+    expect(b.x - zoomed.W / 2).toBeCloseTo(4 * (a.x - wide.W / 2));
+    expect(b.y - zoomed.H / 2).toBeCloseTo(4 * (a.y - wide.H / 2));
+  });
+
+  it('centers a focused crop and keeps deprojection and segment clipping aligned', () => {
+    const cam = camera(0, 15, 0, 8);
+    const target = azElToEnu(8, 20);
+    expect(cam.focusOn(target)).toBe(true);
+    expect(cam.project(target).x).toBeCloseTo(cam.W / 2);
+    expect(cam.project(target).y).toBeCloseTo(cam.H / 2);
+    expect(angleBetweenDeg(cam.unproject(cam.W / 2, cam.H / 2), target)).toBeLessThan(1e-6);
+    const segment = cam.projectSkySegment(target, azElToEnu(30, 20));
+    expect(segment?.start.x).toBeCloseTo(cam.W / 2);
+    expect(segment?.end.x).toBeCloseTo(cam.W);
+    expect(camera(0, 15, 0, 8).focusOn(azElToEnu(50, 20))).toBe(false);
   });
 
   it('clips a sky segment across the viewport even when both stars are offscreen', () => {

@@ -1,14 +1,20 @@
 /** Canvas overlay: horizon, compass ticks, labels, off-screen arrows. */
 import { azElToEnu } from '@skytrace/shared';
 import type { CameraModel } from '../camera/projection';
+import { easeOut, progress, smoothStep } from '../math/motion';
 import { CONSTELLATIONS, type StarSky } from '../stars/constellations';
 import type { SkyObject, SkyReference } from '../types';
+import { hasBodyModel } from './body-model-renderer';
 import { drawSkyMarker, markerCaption, markerColor, markerRadius } from './markers';
+import { CLOSEUP_START_ZOOM, SkyBodyCloseup } from './sky-body-closeup';
+import { TrackMotion } from './track-motion';
 
 export interface Placed {
   obj: SkyObject;
   x: number;
   y: number;
+  radius?: number;
+  opacity?: number;
 }
 
 interface Rect {
@@ -38,8 +44,11 @@ export class Overlay {
   private ctx: CanvasRenderingContext2D;
   private readonly constellationReveals = new Map<string, number>();
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  private readonly zoomModels = new SkyBodyCloseup();
+  private readonly trackMotion = new TrackMotion();
   night = false;
   selectedId: string | null = null;
+  closeup: Extract<SkyObject, { kind: 'body' }> | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -54,13 +63,17 @@ export class Overlay {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
+  resetTrackMotion() { this.trackMotion.clear(); }
+
   /** Draw everything; returns the on-screen positions (for tap hit-testing). */
-  draw(cam: CameraModel, objects: SkyObject[], stars: StarSky | null, reference?: SkyReference): Placed[] {
+  draw(cam: CameraModel, objects: SkyObject[], stars: StarSky | null, reference?: SkyReference, allowEffects = true, now = performance.now()): Placed[] {
     const { ctx } = this;
     const C = this.night ? NIGHT : COLORS;
+    const reduce = this.reducedMotion.matches;
     ctx.clearRect(0, 0, cam.W, cam.H);
     this.drawHorizon(cam, C);
-    const constellationLabels = stars ? this.drawConstellations(cam, stars, C.constellation) : [];
+    const constellationLabels = stars ? this.drawConstellations(cam, stars, C.constellation, now) : [];
+    this.trackMotion.prune(now);
     if(reference) {
       const p = cam.project(reference.dir);
       if(p.front && p.x >= 0 && p.x <= cam.W && p.y >= 0 && p.y <= cam.H) {
@@ -77,21 +90,56 @@ export class Overlay {
     const placed: Placed[] = [];
     const arrows: SkyObject[] = [];
     const margin = 4;
+    let zoomed: Placed | undefined;
+    let nearest = Infinity;
+    this.closeup = null;
 
     for (const o of sorted) {
-      const p = cam.project(o.dir);
+      let p = cam.project(o.dir);
+      let opacity = 1;
+      if(allowEffects && o.kind !== 'body' && o.motionRevision !== undefined && p.front && p.x >= -80 && p.x <= cam.W + 80 && p.y >= -80 && p.y <= cam.H + 80) {
+        const sample = this.trackMotion.sample(o.id, o.motionRevision, o.dir, now, o.kind === 'aircraft' ? 680 : 360, reduce);
+        if(sample.dir !== o.dir) p = cam.project(sample.dir);
+        opacity = sample.opacity;
+      }
       const onScreen = p.front && p.x > -margin && p.x < cam.W + margin && p.y > -margin && p.y < cam.H + margin;
       if (!onScreen) {
         if (o.priority >= 70 || o.id === this.selectedId) arrows.push(o);
         continue;
       }
-      placed.push({ obj: o, x: p.x, y: p.y });
+      const entry: Placed = { obj: o, x: p.x, y: p.y, opacity };
+      placed.push(entry);
+      if(allowEffects && cam.zoom >= CLOSEUP_START_ZOOM && o.kind === 'body' && hasBodyModel(o.symbol) && (o.visible || o.id === this.selectedId)) {
+        const score = Math.hypot(p.x - cam.W / 2, p.y - cam.H / 2) - (o.id === this.selectedId ? cam.W : 0);
+        if(score < nearest) {
+          nearest = score;
+          zoomed = entry;
+        }
+      }
     }
     for(let i = placed.length - 1; i >= 0; i --) {
-      const { obj, x, y } = placed[i]!;
-      drawSkyMarker(ctx, cam, obj, x, y, this.night, obj.id === this.selectedId);
+      if(placed[i] === zoomed) continue;
+      const { obj, x, y, opacity } = placed[i]!;
+      drawSkyMarker(ctx, cam, obj, x, y, this.night, obj.id === this.selectedId, opacity);
+    }
+    if(zoomed?.obj.kind === 'body' && hasBodyModel(zoomed.obj.symbol)) {
+      const { obj, x, y } = zoomed;
+      const symbol = zoomed.obj.symbol;
+      const blend = reduce ? 1 : smoothStep(progress(cam.zoom, CLOSEUP_START_ZOOM, 1.7));
+      if(blend < 1) drawSkyMarker(ctx, cam, obj, x, y, this.night, obj.id === this.selectedId, 1 - blend);
+      if(blend > 0) {
+        const glowScale = reduce ? 1 : 1 + .022 * Math.sin(now / 880);
+        const size = this.zoomModels.draw(ctx, cam, obj, symbol, x, y, this.night, blend, glowScale);
+        zoomed.radius = markerRadius(obj) * (1 - blend) + size * blend;
+      }
+      if(blend >= .5) {
+        this.closeup = obj;
+        const radius = zoomed.radius!, height = obj.symbol === 'saturn' ? radius * .61 : radius;
+        taken.push({ x: x - radius, y: y - height, w: radius * 2, h: height * 2 });
+      }
     }
     for(const p of placed) {
+      if(p === zoomed && this.closeup) continue;
       const selected = p.obj.id === this.selectedId;
       if(p.obj.kind === 'sat' && !p.obj.visible && !p.obj.station && !selected) continue;
       const caption = markerCaption(p.obj, selected);
@@ -101,7 +149,7 @@ export class Overlay {
         this.drawLabel(p, rect, C, caption, selected);
       }
     }
-    this.drawArrows(cam, arrows.slice(0, 10), taken);
+    if(!this.closeup) this.drawArrows(cam, arrows.slice(0, 10), taken);
     ctx.font = '600 12px system-ui, sans-serif';
     ctx.textAlign = 'center';
     for(const { name, x, y } of constellationLabels) {
@@ -115,7 +163,7 @@ export class Overlay {
       ctx.fillStyle = C.constellation;
       ctx.fillText(name, rect.x + w / 2, rect.y + 13);
     }
-    this.drawCrosshair(cam, C);
+    if(!zoomed || Math.hypot(zoomed.x - cam.W / 2, zoomed.y - cam.H / 2) > (zoomed.radius ?? 0)) this.drawCrosshair(cam, C);
     return placed;
   }
 
@@ -123,30 +171,29 @@ export class Overlay {
     this.constellationReveals.clear();
   }
 
-  private drawConstellations(cam: CameraModel, { directions }: StarSky, color: string) {
+  private drawConstellations(cam: CameraModel, { directions }: StarSky, color: string, now: number) {
     const { ctx } = this;
-    const now = performance.now();
     const labels: Array<{ name: string; x: number; y: number }> = [];
     ctx.save();
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 1;
     for(const { id, name, segments, vertices } of CONSTELLATIONS) {
-      const visible = segments.flatMap(([a, b]) => {
+      const visible = segments.flatMap(([a, b], index) => {
         const line = cam.projectSkySegment(directions[a]!, directions[b]!);
-        return line ? [line] : [];
+        return line ? [{ ...line, index }] : [];
       });
       if(!visible.length) continue;
       const first = this.constellationReveals.get(id) ?? now;
       this.constellationReveals.set(id, first);
-      const reveal = this.reducedMotion.matches ? visible.length : Math.min(1, (now - first) / 420) * visible.length;
+      const reveal = (this.reducedMotion.matches ? 1 : easeOut(progress(now, first, 460))) * segments.length;
       let x = 0, y = 0;
       ctx.globalAlpha = 0.64;
       ctx.beginPath();
-      for(const [i, { start, end }] of visible.entries()) {
+      for(const { start, end, index } of visible) {
         x += (start.x + end.x) / 2;
         y += (start.y + end.y) / 2;
-        const part = Math.min(1, reveal - i);
+        const part = Math.min(1, reveal - index);
         if(part <= 0) continue;
         ctx.moveTo(start.x, start.y);
         ctx.lineTo(start.x + part * (end.x - start.x), start.y + part * (end.y - start.y));
@@ -223,7 +270,7 @@ export class Overlay {
     return candidates.find((r) => r.x >= 4 && r.y >= 4 && r.x + r.w <= cam.W - 4 && r.y + r.h <= cam.H - 4 && !taken.some((t) => overlaps(r, t))) ?? null;
   }
 
-  private drawLabel({ obj, x, y }: Placed, r: Rect, C: typeof COLORS, caption: string, selected: boolean) {
+  private drawLabel({ obj, x, y, opacity = 1 }: Placed, r: Rect, C: typeof COLORS, caption: string, selected: boolean) {
     const { ctx } = this;
     const color = markerColor(obj, this.night);
     const edgeX = r.x < x ? r.x + r.w : r.x, edgeY = r.y + r.h / 2;
@@ -232,19 +279,19 @@ export class Overlay {
     ctx.save();
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
-    ctx.globalAlpha = selected ? .9 : .48;
+    ctx.globalAlpha = opacity * (selected ? .9 : .48);
     ctx.beginPath();
     ctx.moveTo(x + (edgeX - x) * start, y + (edgeY - y) * start);
     ctx.lineTo(edgeX, edgeY);
     ctx.stroke();
 
-    ctx.globalAlpha = obj.visible || selected ? 1 : .78;
+    ctx.globalAlpha = opacity * (obj.visible || selected ? 1 : .78);
     ctx.fillStyle = C.box;
     roundRect(ctx, r.x, r.y, r.w, r.h, 7);
     ctx.fill();
     ctx.globalAlpha *= selected ? .9 : .28;
     ctx.stroke();
-    ctx.globalAlpha = obj.visible || selected ? 1 : .78;
+    ctx.globalAlpha = opacity * (obj.visible || selected ? 1 : .78);
     ctx.textAlign = 'left';
     ctx.fillStyle = color;
     ctx.font = '600 13px system-ui, sans-serif';

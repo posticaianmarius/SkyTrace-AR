@@ -136,10 +136,15 @@ export class Satellites {
       out.push({
         kind: 'sat',
         station: isStation,
+        motionRevision: L.t0,
         id: `sat-${s.norad}`,
         label: prettyName(s.name),
         sub: `${Math.round(s.altKm)} km alt · ${Math.round(s.rangeKm)} km${visible ? ' · visible' : s.sunlit ? '' : ' · in shadow'}`,
         dir: azElToEnu(la.azDeg, el),
+        get nextDir() {
+          const next = enuToAzEl(lerpDir(s, k + .2));
+          return azElToEnu(next.azDeg, next.elDeg + refractionDeg(next.elDeg));
+        },
         azDeg: la.azDeg,
         elDeg: el,
         rangeKm: s.rangeKm,
